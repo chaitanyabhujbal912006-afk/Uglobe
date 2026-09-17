@@ -271,34 +271,112 @@ body {
   bottom: 24px;
   left: 24px;
   z-index: 10;
-  width: 300px;
-  padding: 16px;
+  width: 320px;
+  padding: 16px 20px;
   background: #050505;
   border: 1px solid #00f3ff;
+  border-radius: 0px;
   font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);
 }
 
-.info-panel h3 {
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 12px;
-  color: #00f3ff;
-  text-transform: uppercase;
+/* Structural SVG Corner Accents (Electric Blue Crosshairs & Circuit Lines) */
+.corner-accent {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.corner-accent.top-left {
+  top: -4px;
+  left: -4px;
+}
+
+.corner-accent.top-right {
+  top: -4px;
+  right: -4px;
+}
+
+.corner-accent.bottom-left {
+  bottom: -4px;
+  left: -4px;
+}
+
+.corner-accent.bottom-right {
+  bottom: -4px;
+  right: -4px;
+}
+
+.info-panel-header {
   border-bottom: 1px solid #1e293b;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.telemetry-header-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.telemetry-target-id {
+  font-size: 11px;
+  font-weight: 800;
+  color: #00f3ff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
-  margin-bottom: 8px;
-  color: #ffffff;
+  align-items: baseline;
+  margin-bottom: 10px;
   text-transform: uppercase;
 }
 
-.info-row span:first-child {
-  color: #64748b;
+.telemetry-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b; /* Muted slate gray */
+  letter-spacing: 0.12em;
+}
+
+.telemetry-value {
+  font-size: 17px; /* Significantly larger */
+  font-weight: 800;
+  color: #ccff00; /* High-intensity neon yellow */
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(204, 255, 0, 0.35);
+}
+
+.telemetry-value.position {
+  font-size: 13px;
+}
+
+/* Hardware Terminal Refresh Flash Animation (100ms) */
+@keyframes terminalFlash {
+  0% {
+    opacity: 0.15;
+    filter: brightness(2.5) contrast(1.5);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.6);
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+.terminal-refresh {
+  animation: terminalFlash 100ms cubic-bezier(0, 0, 0.2, 1);
 }
 
 .flight-count {

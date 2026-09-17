@@ -224,6 +224,53 @@ function create3DArcLines(radius) {
   return geo
 }
 
+/**
+ * Parses GeoJSON landmass boundaries (Polygon & MultiPolygon) into 3D Vector3 points
+ * and returns a THREE.BufferGeometry for wireframe rendering via THREE.LineSegments.
+ */
+function parseGeoJSONToLines(geojson, radius) {
+  const positions = []
+
+  function processPolygon(coordinates) {
+    coordinates.forEach((ring) => {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const [lon1, lat1] = ring[i]
+        const [lon2, lat2] = ring[i + 1]
+
+        const p1 = latLongToVector3(lat1, lon1, radius)
+        const p2 = latLongToVector3(lat2, lon2, radius)
+
+        positions.push(p1.x, p1.y, p1.z)
+        positions.push(p2.x, p2.y, p2.z)
+      }
+    })
+  }
+
+  if (geojson.type === 'FeatureCollection') {
+    geojson.features.forEach((feature) => {
+      if (feature.geometry) {
+        if (feature.geometry.type === 'Polygon') {
+          processPolygon(feature.geometry.coordinates)
+        } else if (feature.geometry.type === 'MultiPolygon') {
+          feature.geometry.coordinates.forEach((polyCoords) => {
+            processPolygon(polyCoords)
+          })
+        }
+      }
+    })
+  } else if (geojson.type === 'Polygon') {
+    processPolygon(geojson.coordinates)
+  } else if (geojson.type === 'MultiPolygon') {
+    geojson.coordinates.forEach((polyCoords) => {
+      processPolygon(polyCoords)
+    })
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  return geometry
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -506,6 +553,22 @@ export default function Globe({
 
     const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial)
     globeGroup.add(earthMesh)
+
+    // GeoJSON Continental Outlines (Wireframe vector map at ~15% opacity electric blue)
+    fetch('/land.json')
+      .then((res) => res.json())
+      .then((geojson) => {
+        const landGeo = parseGeoJSONToLines(geojson, GLOBE_RADIUS * 1.002)
+        const landMat = new THREE.LineBasicMaterial({
+          color: 0x00f3ff,
+          transparent: true,
+          opacity: 0.15,
+          depthWrite: false,
+        })
+        const landLines = new THREE.LineSegments(landGeo, landMat)
+        globeGroup.add(landLines)
+      })
+      .catch((err) => console.warn('Could not load GeoJSON landmass outlines:', err))
 
     // Fresnel Atmosphere Glow — FrontSide sphere around Earth (radius 1.025 * GLOBE_RADIUS)
     const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64)
