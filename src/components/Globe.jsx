@@ -190,8 +190,8 @@ function create3DArcLines(radius) {
     const dot = Math.max(-1, Math.min(1, u1.dot(u2)))
     const angleRad = Math.acos(dot)
 
-    // Slerp midpoint: interpolates directional unit vector halfway (t = 0.5)
-    midNorm.copy(u1).slerp(u2, 0.5).normalize()
+    // Spherical linear interpolation midpoint (t = 0.5) for peak control vector
+    midNorm.addVectors(u1, u2).normalize()
 
     // Peak height scales dynamically based on slerp angular distance
     const peakAltitude = radius + Math.min(angleRad * 0.75, 1.4)
