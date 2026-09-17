@@ -2,18 +2,24 @@ import { useState, useRef } from 'react'
 import Globe from './components/Globe.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
 import { useFlights } from './hooks/useFlights.js'
+import { useEarthquakes } from './hooks/useEarthquakes.js'
+import { useSatellites } from './hooks/useSatellites.js'
 
 export default function App() {
-  const { flights, status, lastUpdated } = useFlights()
+  const { flights, status: flightStatus, lastUpdated } = useFlights()
+  const { earthquakes } = useEarthquakes()
+  const { satellites } = useSatellites()
+
   const [selectedFlight, setSelectedFlight] = useState(null)
   const [filterQuery, setFilterQuery] = useState('')
-  const resetCameraRef = useRef(null) // set by Globe once the scene is ready
+  const [activeLayer, setActiveLayer] = useState('all') // 'all' | 'flights' | 'satellites' | 'earthquakes'
+  const resetCameraRef = useRef(null)
 
   const statusLabel = {
     loading: 'Connecting…',
     live: 'Live',
     error: 'Reconnecting…',
-  }[status]
+  }[flightStatus]
 
   const matchCount = filterQuery.trim()
     ? flights.filter(
@@ -27,6 +33,9 @@ export default function App() {
     <div className="app-shell">
       <Globe
         flights={flights}
+        earthquakes={earthquakes}
+        satellites={satellites}
+        activeLayer={activeLayer}
         filterQuery={filterQuery}
         onSelectFlight={setSelectedFlight}
         onResetReady={(fn) => { resetCameraRef.current = fn }}
@@ -34,7 +43,35 @@ export default function App() {
 
       <div className="hud">
         <div className="hud-title">🌍 Live Globe</div>
-        <div className="hud-subtitle">Real-time flight tracker · click a point</div>
+        <div className="hud-subtitle">Real-time 3D flight, satellite & earthquake visualizer</div>
+
+        {/* Data Layer Toggles */}
+        <div className="layer-selector">
+          <button
+            className={`layer-btn ${activeLayer === 'all' ? 'active' : ''}`}
+            onClick={() => setActiveLayer('all')}
+          >
+            🌐 All
+          </button>
+          <button
+            className={`layer-btn ${activeLayer === 'flights' ? 'active' : ''}`}
+            onClick={() => setActiveLayer('flights')}
+          >
+            ✈️ Flights ({flights.length})
+          </button>
+          <button
+            className={`layer-btn ${activeLayer === 'satellites' ? 'active' : ''}`}
+            onClick={() => setActiveLayer('satellites')}
+          >
+            🛰️ Satellites ({satellites.length})
+          </button>
+          <button
+            className={`layer-btn ${activeLayer === 'earthquakes' ? 'active' : ''}`}
+            onClick={() => setActiveLayer('earthquakes')}
+          >
+            🌋 Earthquakes ({earthquakes.length})
+          </button>
+        </div>
 
         {/* Search */}
         <div className="search-row">
@@ -90,10 +127,10 @@ export default function App() {
 
       {/* Cybernetic Telemetry Ticker */}
       <div className="telemetry-ticker">
-        <span className="ticker-label">RADAR.NET // LIVE</span>
+        <span className="ticker-label">RADAR.NET // LIVE DATA ENGINE</span>
         <span className="ticker-divider">|</span>
         <span className="ticker-text">
-          TRACKED TARGETS: {flights.length.toLocaleString()} AIRCRAFT · SATELLITE FEED: OPENSKY NETWORK · REFRESH RATE: REALTIME 60FPS
+          ✈️ {flights.length.toLocaleString()} FLIGHTS · 🛰️ {satellites.length.toLocaleString()} SATELLITES · 🌋 {earthquakes.length.toLocaleString()} QUAKES · FEEDS: OPENSKY + CELESTRAK + USGS
         </span>
       </div>
 

@@ -47,6 +47,41 @@ body {
   margin-top: 4px;
 }
 
+/* ---- Layer Selector ---- */
+.layer-selector {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  pointer-events: auto;
+  flex-wrap: wrap;
+}
+
+.layer-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 20, 35, 0.7);
+  backdrop-filter: blur(8px);
+  color: #94a3b8;
+  font-size: 11px;
+  font-family: "SF Mono", "JetBrains Mono", monospace;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.layer-btn:hover {
+  background: rgba(30, 41, 59, 0.85);
+  color: #f1f5f9;
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.layer-btn.active {
+  background: rgba(0, 229, 255, 0.18);
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.6);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+}
+
 /* ---- Search ---- */
 .search-row {
   display: flex;

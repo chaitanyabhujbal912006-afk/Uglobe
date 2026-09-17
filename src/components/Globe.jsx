@@ -139,98 +139,217 @@ function createPaperAirplaneGeometry() {
   return geom
 }
 
+// Major global flight routes for 3D Arcs
+const MAJOR_ROUTES = [
+  { from: [51.5074, -0.1278],  to: [40.7128, -74.0060] },  // London ↔ NYC
+  { from: [35.6762, 139.6503], to: [34.0522, -118.2437] }, // Tokyo ↔ LA
+  { from: [25.2048, 55.2708],  to: [1.3521, 103.8198] },   // Dubai ↔ Singapore
+  { from: [-33.8688, 151.2093],to: [1.3521, 103.8198] },   // Sydney ↔ Singapore
+  { from: [48.8566, 2.3522],   to: [25.2048, 55.2708] },   // Paris ↔ Dubai
+  { from: [22.3193, 114.1694], to: [37.7749, -122.4194] }, // Hong Kong ↔ SF
+  { from: [-23.5505, -46.6333],to: [40.7128, -74.0060] },  // São Paulo ↔ NYC
+  { from: [51.5074, -0.1278],  to: [25.2048, 55.2708] },   // London ↔ Dubai
+  { from: [35.6762, 139.6503], to: [51.5074, -0.1278] },   // Tokyo ↔ London
+  { from: [1.3521, 103.8198],  to: [51.5074, -0.1278] },   // Singapore ↔ London
+  { from: [19.0760, 72.8777],  to: [51.5074, -0.1278] },   // Mumbai ↔ London
+  { from: [37.5665, 126.9780], to: [37.7749, -122.4194] }, // Seoul ↔ SF
+]
+
+function create3DArcLines(radius) {
+  const pointsList = []
+  MAJOR_ROUTES.forEach((route) => {
+    const p1 = latLongToVector3(route.from[0], route.from[1], radius * 1.01)
+    const p2 = latLongToVector3(route.to[0], route.to[1], radius * 1.01)
+
+    const v1 = new THREE.Vector3(p1.x, p1.y, p1.z)
+    const v2 = new THREE.Vector3(p2.x, p2.y, p2.z)
+
+    const dist = v1.distanceTo(v2)
+    const mid = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5).normalize()
+    mid.multiplyScalar(radius + Math.min(dist * 0.35, 1.2))
+
+    const curve = new THREE.QuadraticBezierCurve3(v1, mid, v2)
+    const points = curve.getPoints(36)
+
+    for (let i = 0; i < points.length - 1; i++) {
+      pointsList.push(points[i].x, points[i].y, points[i].z)
+      pointsList.push(points[i + 1].x, points[i + 1].y, points[i + 1].z)
+    }
+  })
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pointsList, 3))
+  return geo
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export default function Globe({ flights, filterQuery = '', onSelectFlight, onResetReady }) {
-  const containerRef     = useRef(null)
-  const flightsRef       = useRef(flights)
-  const filterQueryRef   = useRef(filterQuery)
-  const instancedMeshRef = useRef(null)
-  const selectionRingRef = useRef(null)
-  const selectedIdxRef   = useRef(-1)
-  const trailGeoRef      = useRef(null)
-  const trailMatRef      = useRef(null)
+export default function Globe({
+  flights = [],
+  earthquakes = [],
+  satellites = [],
+  activeLayer = 'all',
+  filterQuery = '',
+  onSelectFlight,
+  onResetReady,
+}) {
+  const containerRef       = useRef(null)
+  const flightsRef         = useRef(flights)
+  const earthquakesRef     = useRef(earthquakes)
+  const satellitesRef      = useRef(satellites)
+  const activeLayerRef     = useRef(activeLayer)
+  const filterQueryRef     = useRef(filterQuery)
+
+  const instancedMeshRef   = useRef(null)
+  const satellitesMeshRef  = useRef(null)
+  const earthquakesMeshRef = useRef(null)
+  const arcsMeshRef        = useRef(null)
+  const selectionRingRef   = useRef(null)
+  const selectedIdxRef     = useRef(-1)
+  const trailGeoRef        = useRef(null)
+  const trailMatRef        = useRef(null)
 
   useEffect(() => {
     flightsRef.current     = flights
+    earthquakesRef.current = earthquakes
+    satellitesRef.current  = satellites
+    activeLayerRef.current = activeLayer
     filterQueryRef.current = filterQuery
     updateMarkers()
-  }, [flights, filterQuery])
+  }, [flights, earthquakes, satellites, activeLayer, filterQuery])
 
   // -------------------------------------------------------------------------
-  // updateMarkers — one call per data cycle; updates instanced mesh + trails
+  // updateMarkers — one call per data cycle; updates all active 3D layers
   // -------------------------------------------------------------------------
   function updateMarkers() {
+    const layer = activeLayerRef.current
+    const showFlights = layer === 'all' || layer === 'flights'
+    const showSats    = layer === 'all' || layer === 'satellites'
+    const showEqs     = layer === 'all' || layer === 'earthquakes'
+
+    // --- 1. Flights & Trails ---
     const mesh = instancedMeshRef.current
-    if (!mesh) return
+    if (mesh) {
+      const currentFlights = flightsRef.current
+      const query = (filterQueryRef.current || '').toLowerCase().trim()
+      const n = showFlights ? Math.min(currentFlights.length, MAX_INSTANCES) : 0
 
-    const currentFlights = flightsRef.current
-    const query = (filterQueryRef.current || '').toLowerCase().trim()
-    const n = Math.min(currentFlights.length, MAX_INSTANCES)
+      mesh.count = n
 
-    mesh.count = n
+      const trailGeo = trailGeoRef.current
+      const tPos = trailGeo?.attributes?.position?.array
+      const tCol = trailGeo?.attributes?.aColor?.array
+      const tAlp = trailGeo?.attributes?.aAlpha?.array
 
-    const trailGeo = trailGeoRef.current
-    const tPos = trailGeo?.attributes?.position?.array
-    const tCol = trailGeo?.attributes?.aColor?.array
-    const tAlp = trailGeo?.attributes?.aAlpha?.array
+      for (let i = 0; i < n; i++) {
+        const f = currentFlights[i]
+        const raw = latLongToVector3(f.latitude, f.longitude, GLOBE_RADIUS * 1.012)
+        _pos.set(raw.x, raw.y, raw.z)
 
-    for (let i = 0; i < n; i++) {
-      const f = currentFlights[i]
+        computeHeadingQuat(f.latitude, f.longitude, f.heading ?? 0, _quat)
 
-      const raw = latLongToVector3(f.latitude, f.longitude, GLOBE_RADIUS * 1.012)
-      _pos.set(raw.x, raw.y, raw.z)
+        const matched =
+          !query ||
+          (f.callsign      || '').toLowerCase().includes(query) ||
+          (f.originCountry || '').toLowerCase().includes(query)
 
-      // Sets _hPos (unit surface normal) and _hDir (heading tangent) as side-effects
-      computeHeadingQuat(f.latitude, f.longitude, f.heading ?? 0, _quat)
+        const s = matched ? 1 : 0.15
+        _scale.set(s, s, s)
+        _mat.compose(_pos, _quat, _scale)
+        mesh.setMatrixAt(i, _mat)
 
-      const matched =
-        !query ||
-        (f.callsign      || '').toLowerCase().includes(query) ||
-        (f.originCountry || '').toLowerCase().includes(query)
+        altitudeToColor(f.altitude)
+        const tr = _altColor.r, tg = _altColor.g, tb = _altColor.b
 
-      const s = matched ? 1 : 0.15
-      _scale.set(s, s, s)
-      _mat.compose(_pos, _quat, _scale)
-      mesh.setMatrixAt(i, _mat)
+        _color.copy(_altColor)
+        if (!matched) _color.multiplyScalar(0.08)
+        mesh.setColorAt(i, _color)
 
-      // Altitude colour — already HDR-boosted by altitudeToColor
-      altitudeToColor(f.altitude)                    // sets _altColor
-      const tr = _altColor.r, tg = _altColor.g, tb = _altColor.b
+        if (tPos) {
+          const v0 = i * 2
+          const v1 = i * 2 + 1
 
-      _color.copy(_altColor)
-      if (!matched) _color.multiplyScalar(0.08)
-      mesh.setColorAt(i, _color)
+          tPos[v0 * 3] = _pos.x; tPos[v0 * 3 + 1] = _pos.y; tPos[v0 * 3 + 2] = _pos.z
+          tAlp[v0] = matched ? 1.0 : 0.0
 
-      // Trail vertices
-      if (tPos) {
-        const v0 = i * 2
-        const v1 = i * 2 + 1
+          _trailAxis.crossVectors(_hPos, _hDir).normalize()
+          _trailQRot.setFromAxisAngle(_trailAxis, -TRAIL_ANGLE)
+          _trailNorm.copy(_hPos).applyQuaternion(_trailQRot)
+          const R = GLOBE_RADIUS * 1.012
+          tPos[v1 * 3] = _trailNorm.x * R; tPos[v1 * 3 + 1] = _trailNorm.y * R; tPos[v1 * 3 + 2] = _trailNorm.z * R
+          tAlp[v1] = 0.0
 
-        tPos[v0 * 3] = _pos.x; tPos[v0 * 3 + 1] = _pos.y; tPos[v0 * 3 + 2] = _pos.z
-        tAlp[v0] = matched ? 1.0 : 0.0
+          tCol[v0 * 3] = tr; tCol[v0 * 3 + 1] = tg; tCol[v0 * 3 + 2] = tb
+          tCol[v1 * 3] = tr; tCol[v1 * 3 + 1] = tg; tCol[v1 * 3 + 2] = tb
+        }
+      }
 
-        _trailAxis.crossVectors(_hPos, _hDir).normalize()
-        _trailQRot.setFromAxisAngle(_trailAxis, -TRAIL_ANGLE)
-        _trailNorm.copy(_hPos).applyQuaternion(_trailQRot)
-        const R = GLOBE_RADIUS * 1.012
-        tPos[v1 * 3] = _trailNorm.x * R; tPos[v1 * 3 + 1] = _trailNorm.y * R; tPos[v1 * 3 + 2] = _trailNorm.z * R
-        tAlp[v1] = 0.0
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
 
-        tCol[v0 * 3] = tr; tCol[v0 * 3 + 1] = tg; tCol[v0 * 3 + 2] = tb
-        tCol[v1 * 3] = tr; tCol[v1 * 3 + 1] = tg; tCol[v1 * 3 + 2] = tb
+      if (trailGeo && tPos) {
+        trailGeo.attributes.position.needsUpdate = true
+        trailGeo.attributes.aColor.needsUpdate   = true
+        trailGeo.attributes.aAlpha.needsUpdate   = true
+        trailGeo.setDrawRange(0, n * 2)
       }
     }
 
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    // --- 2. 3D Great-Circle Arcs ---
+    if (arcsMeshRef.current) {
+      arcsMeshRef.current.visible = showFlights
+    }
 
-    if (trailGeo && tPos) {
-      trailGeo.attributes.position.needsUpdate = true
-      trailGeo.attributes.aColor.needsUpdate   = true
-      trailGeo.attributes.aAlpha.needsUpdate   = true
-      trailGeo.setDrawRange(0, n * 2)
+    // --- 3. Satellites (Orbital Altitude) ---
+    const satMesh = satellitesMeshRef.current
+    if (satMesh) {
+      const currentSats = satellitesRef.current
+      const nSat = showSats ? Math.min(currentSats.length, 300) : 0
+      satMesh.count = nSat
+
+      for (let i = 0; i < nSat; i++) {
+        const s = currentSats[i]
+        const rOrbit = GLOBE_RADIUS * (1.16 + (s.altitudeKm / 3500))
+        const raw = latLongToVector3(s.latitude, s.longitude, rOrbit)
+        _pos.set(raw.x, raw.y, raw.z)
+        _quat.identity()
+        _scale.setScalar(1.0)
+        _mat.compose(_pos, _quat, _scale)
+        satMesh.setMatrixAt(i, _mat)
+
+        _color.setHSL(0.52 + (i % 4) * 0.1, 1.0, 0.7).multiplyScalar(2.5)
+        satMesh.setColorAt(i, _color)
+      }
+      satMesh.instanceMatrix.needsUpdate = true
+      if (satMesh.instanceColor) satMesh.instanceColor.needsUpdate = true
+    }
+
+    // --- 4. Earthquakes (Pulsing Surface Rings) ---
+    const eqMesh = earthquakesMeshRef.current
+    if (eqMesh) {
+      const currentEqs = earthquakesRef.current
+      const nEq = showEqs ? Math.min(currentEqs.length, 100) : 0
+      eqMesh.count = nEq
+
+      for (let i = 0; i < nEq; i++) {
+        const eq = currentEqs[i]
+        const raw = latLongToVector3(eq.latitude, eq.longitude, GLOBE_RADIUS * 1.004)
+        _pos.set(raw.x, raw.y, raw.z)
+        _hPos.set(raw.x, raw.y, raw.z).normalize()
+        _quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _hPos)
+
+        const magScale = 0.6 + Math.min(eq.magnitude, 8) * 0.35
+        _scale.set(magScale, magScale, magScale)
+        _mat.compose(_pos, _quat, _scale)
+        eqMesh.setMatrixAt(i, _mat)
+
+        const tMag = Math.min(1, Math.max(0, (eq.magnitude - 2.5) / 5.0))
+        _color.setHSL(0.14 - tMag * 0.14, 1.0, 0.55).multiplyScalar(2.5)
+        eqMesh.setColorAt(i, _color)
+      }
+      eqMesh.instanceMatrix.needsUpdate = true
+      if (eqMesh.instanceColor) eqMesh.instanceColor.needsUpdate = true
     }
 
     positionSelectionRing(selectedIdxRef.current)
@@ -292,50 +411,52 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     const globeGroup = new THREE.Group()
     scene.add(globeGroup)
 
-    // Earth — day/night ShaderMaterial
-    const textureLoader = new THREE.TextureLoader()
+    // Earth — Stark, modern negative-space globe with electric blue grid
     const earthGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64)
-    const blankTex = new THREE.DataTexture(new Uint8Array([30, 50, 80, 255]), 1, 1)
-    blankTex.needsUpdate = true
-    const blackTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1)
-    blackTex.needsUpdate = true
-
     const earthMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        dayMap:       { value: blankTex },
-        nightMap:     { value: blackTex },
         sunDirection: { value: SUN_DIR.clone() },
       },
       vertexShader: `
         varying vec2 vUv;
         varying vec3 vWorldNormal;
+        varying vec3 vViewDir;
         void main() {
           vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
           vWorldNormal = normalize(mat3(modelMatrix) * normal);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vViewDir = normalize(cameraPosition - worldPos.xyz);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
       `,
       fragmentShader: `
-        uniform sampler2D dayMap;
-        uniform sampler2D nightMap;
         uniform vec3 sunDirection;
         varying vec2 vUv;
         varying vec3 vWorldNormal;
+        varying vec3 vViewDir;
+
         void main() {
-          float cosAngle = dot(vWorldNormal, sunDirection);
-          float dayMix   = smoothstep(-0.15, 0.25, cosAngle);
-          vec4  dayColorRaw   = texture2D(dayMap,   vUv);
-          vec4  nightColorRaw = texture2D(nightMap, vUv);
-          
-          // Darken daytime texture to a deep, rich slate blue canvas
-          // Landmasses remain crisp and detailed without blowing out
-          vec3 darkDay = dayColorRaw.rgb * 0.38;
-          
-          // Night lights on unlit side
-          float nightStrength = 1.0 - dayMix;
-          vec3 litNight = nightColorRaw.rgb * nightStrength * 2.0;
-          
-          vec3 finalCol = mix(litNight, darkDay, dayMix);
+          // Procedural lat/lon coordinate grid
+          vec2 gridLines = abs(fract(vUv * vec2(24.0, 12.0) - 0.5) - 0.5) / fwidth(vUv * vec2(24.0, 12.0));
+          float line = min(gridLines.x, gridLines.y);
+          float grid = 1.0 - min(line, 1.0);
+
+          // Dark negative space base color
+          vec3 baseColor = vec3(0.015, 0.03, 0.07);
+
+          // Electric cyan-blue grid lines
+          vec3 gridColor = vec3(0.0, 0.85, 1.0) * grid * 0.45;
+
+          // Smooth Fresnel edge highlight
+          float dotNV = dot(vWorldNormal, vViewDir);
+          float fresnel = pow(1.0 - max(0.0, dotNV), 3.0);
+          vec3 rimGlow = vec3(0.0, 0.65, 1.0) * fresnel * 0.4;
+
+          // Sun lighting
+          float sunDot = dot(vWorldNormal, sunDirection);
+          float sunFactor = smoothstep(-0.2, 0.3, sunDot) * 0.4 + 0.6;
+
+          vec3 finalCol = (baseColor + gridColor + rimGlow) * sunFactor;
           gl_FragColor = vec4(finalCol, 1.0);
         }
       `,
@@ -343,8 +464,6 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
 
     const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial)
     globeGroup.add(earthMesh)
-    textureLoader.load(EARTH_DAY_URL,   (tex) => { earthMaterial.uniforms.dayMap.value   = tex })
-    textureLoader.load(EARTH_NIGHT_URL, (tex) => { earthMaterial.uniforms.nightMap.value = tex })
 
     // Fresnel Atmosphere Glow — FrontSide sphere around Earth (radius 1.025 * GLOBE_RADIUS)
     const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64)
@@ -552,6 +671,51 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     trailGeoRef.current = trailGeometry
     trailMatRef.current = trailMaterial
 
+    // -----------------------------------------------------------------------
+    // 3D Glowing Great-Circle Arcs
+    // -----------------------------------------------------------------------
+    const arcsGeometry = create3DArcLines(GLOBE_RADIUS)
+    const arcsMaterial = new THREE.LineBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    })
+    const arcsMesh = new THREE.LineSegments(arcsGeometry, arcsMaterial)
+    globeGroup.add(arcsMesh)
+    arcsMeshRef.current = arcsMesh
+
+    // -----------------------------------------------------------------------
+    // Satellites InstancedMesh (Orbital Altitude)
+    // -----------------------------------------------------------------------
+    const satGeometry = new THREE.OctahedronGeometry(0.014)
+    const satMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      toneMapped: false,
+    })
+    const satellitesMesh = new THREE.InstancedMesh(satGeometry, satMaterial, 300)
+    satellitesMesh.count = 0
+    globeGroup.add(satellitesMesh)
+    satellitesMeshRef.current = satellitesMesh
+
+    // -----------------------------------------------------------------------
+    // Earthquakes InstancedMesh (Pulsing Surface Rings)
+    // -----------------------------------------------------------------------
+    const eqGeometry = new THREE.RingGeometry(0.015, 0.032, 24)
+    const eqMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    })
+    const earthquakesMesh = new THREE.InstancedMesh(eqGeometry, eqMaterial, 100)
+    earthquakesMesh.count = 0
+    globeGroup.add(earthquakesMesh)
+    earthquakesMeshRef.current = earthquakesMesh
+
     updateMarkers()
 
     // Selection ring
@@ -661,10 +825,12 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
       composer.dispose()
       renderer.dispose()
       earthGeometry.dispose(); earthMaterial.dispose()
-      blankTex.dispose(); blackTex.dispose()
       atmosphereGeometry.dispose(); atmosphereMaterial.dispose()
       starGeometry.dispose(); starMaterial.dispose()
       paperPlaneGeometry.dispose(); planeMaterial.dispose()
+      satGeometry.dispose(); satMaterial.dispose()
+      eqGeometry.dispose(); eqMaterial.dispose()
+      arcsGeometry.dispose(); arcsMaterial.dispose()
       ringGeometry.dispose(); ringMaterial.dispose()
       trailGeometry.dispose(); trailMaterial.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
