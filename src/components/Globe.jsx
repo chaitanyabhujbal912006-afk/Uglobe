@@ -155,30 +155,72 @@ const MAJOR_ROUTES = [
   { from: [37.5665, 126.9780], to: [37.7749, -122.4194] }, // Seoul ↔ SF
 ]
 
+/**
+ * Calculates 3D Quadratic Bézier curves over the sphere's surface.
+ * Uses spherical linear interpolation (slerp) to calculate the peak height
+ * of the arc based on the angular distance between the two points.
+ * Returns a single THREE.LineSegments geometry built from a flat Float32Array.
+ */
 function create3DArcLines(radius) {
-  const pointsList = []
+  const segmentsPerArc = 48
+  const totalArcs = MAJOR_ROUTES.length
+  // Each arc segment has 2 vertices, each vertex has 3 floats (x, y, z)
+  const verticesArray = new Float32Array(totalArcs * segmentsPerArc * 2 * 3)
+  let attrIdx = 0
+
+  const v1 = new THREE.Vector3()
+  const v2 = new THREE.Vector3()
+  const u1 = new THREE.Vector3()
+  const u2 = new THREE.Vector3()
+  const midNorm = new THREE.Vector3()
+  const control = new THREE.Vector3()
+  const currPt = new THREE.Vector3()
+  const prevPt = new THREE.Vector3()
+
   MAJOR_ROUTES.forEach((route) => {
-    const p1 = latLongToVector3(route.from[0], route.from[1], radius * 1.01)
-    const p2 = latLongToVector3(route.to[0], route.to[1], radius * 1.01)
+    // 1. Convert lat/lon to 3D Cartesian points on sphere
+    const p1 = latLongToVector3(route.from[0], route.from[1], radius * 1.008)
+    const p2 = latLongToVector3(route.to[0], route.to[1], radius * 1.008)
+    v1.copy(p1)
+    v2.copy(p2)
 
-    const v1 = new THREE.Vector3(p1.x, p1.y, p1.z)
-    const v2 = new THREE.Vector3(p2.x, p2.y, p2.z)
+    // 2. Compute angular distance & slerp direction vector for peak height
+    u1.copy(v1).normalize()
+    u2.copy(v2).normalize()
+    const dot = Math.max(-1, Math.min(1, u1.dot(u2)))
+    const angleRad = Math.acos(dot)
 
-    const dist = v1.distanceTo(v2)
-    const mid = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5).normalize()
-    mid.multiplyScalar(radius + Math.min(dist * 0.35, 1.2))
+    // Slerp midpoint: interpolates directional unit vector halfway (t = 0.5)
+    midNorm.copy(u1).slerp(u2, 0.5).normalize()
 
-    const curve = new THREE.QuadraticBezierCurve3(v1, mid, v2)
-    const points = curve.getPoints(36)
+    // Peak height scales dynamically based on slerp angular distance
+    const peakAltitude = radius + Math.min(angleRad * 0.75, 1.4)
+    control.copy(midNorm).multiplyScalar(peakAltitude)
 
-    for (let i = 0; i < points.length - 1; i++) {
-      pointsList.push(points[i].x, points[i].y, points[i].z)
-      pointsList.push(points[i + 1].x, points[i + 1].y, points[i + 1].z)
+    // 3. Sample 3D Quadratic Bézier curve through (v1, control, v2)
+    const curve = new THREE.QuadraticBezierCurve3(v1, control, v2)
+
+    for (let i = 0; i <= segmentsPerArc; i++) {
+      const t = i / segmentsPerArc
+      curve.getPoint(t, currPt)
+
+      if (i > 0) {
+        // Line segment: start vertex
+        verticesArray[attrIdx++] = prevPt.x
+        verticesArray[attrIdx++] = prevPt.y
+        verticesArray[attrIdx++] = prevPt.z
+
+        // Line segment: end vertex
+        verticesArray[attrIdx++] = currPt.x
+        verticesArray[attrIdx++] = currPt.y
+        verticesArray[attrIdx++] = currPt.z
+      }
+      prevPt.copy(currPt)
     }
   })
 
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pointsList, 3))
+  geo.setAttribute('position', new THREE.BufferAttribute(verticesArray, 3))
   return geo
 }
 
@@ -700,18 +742,39 @@ export default function Globe({
     satellitesMeshRef.current = satellitesMesh
 
     // -----------------------------------------------------------------------
-    // Earthquakes InstancedMesh (Pulsing Surface Rings)
+    // Seismic Event Markers InstancedMesh (Low-Poly Tetrahedron & Emissive Neon Yellow Shader)
     // -----------------------------------------------------------------------
-    const eqGeometry = new THREE.RingGeometry(0.015, 0.032, 24)
-    const eqMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
+    const eqGeometry = new THREE.TetrahedronGeometry(0.018, 0)
+    const eqMaterial = new THREE.ShaderMaterial({
       transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
+      depthWrite: false,
       toneMapped: false,
+      uniforms: {
+        uTime: { value: 0 },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+          vNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+          vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+          vPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+          // Emissive neon yellow (#ffe600 / #ffff00) with subtle pulse wave
+          vec3 neonYellow = vec3(1.0, 0.9, 0.0) * 2.8;
+          float pulse = 0.85 + 0.15 * sin(uTime * 4.0 + vPosition.x * 10.0);
+          gl_FragColor = vec4(neonYellow * pulse, 0.95);
+        }
+      `,
     })
-    const earthquakesMesh = new THREE.InstancedMesh(eqGeometry, eqMaterial, 100)
+    const earthquakesMesh = new THREE.InstancedMesh(eqGeometry, eqMaterial, 500)
     earthquakesMesh.count = 0
     globeGroup.add(earthquakesMesh)
     earthquakesMeshRef.current = earthquakesMesh
@@ -793,7 +856,9 @@ export default function Globe({
       globeGroup.rotation.y += 0.0006
       earthMaterial.uniforms.sunDirection.value.copy(SUN_DIR)
 
-      trailMaterial.uniforms.uTime.value = performance.now() / 1000
+      const nowSec = performance.now() / 1000
+      trailMaterial.uniforms.uTime.value = nowSec
+      eqMaterial.uniforms.uTime.value    = nowSec
 
       if (selectionRing.visible) {
         const pulse = 1 + Math.sin(performance.now() * 0.003) * 0.07
