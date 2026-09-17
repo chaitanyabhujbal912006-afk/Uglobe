@@ -69,6 +69,34 @@ export default function App() {
         </button>
       </div>
 
+      {/* Altitude Spectrum Bar */}
+      <div className="altitude-legend">
+        <div className="legend-title">ALTITUDE SPECTRUM</div>
+        <div className="legend-bar">
+          <div className="legend-segment low" title="< 4,000m: Approach / Low">
+            <span className="dot orange" /> &lt;4,000m
+          </div>
+          <div className="legend-segment mid-low" title="4,000m - 8,000m: Climb">
+            <span className="dot green" /> 4-8k m
+          </div>
+          <div className="legend-segment mid-high" title="8,000m - 12,000m: Cruise">
+            <span className="dot cyan" /> 8-12k m
+          </div>
+          <div className="legend-segment high" title="> 12,000m+: High Altitude">
+            <span className="dot blue" /> &gt;12k m
+          </div>
+        </div>
+      </div>
+
+      {/* Cybernetic Telemetry Ticker */}
+      <div className="telemetry-ticker">
+        <span className="ticker-label">RADAR.NET // LIVE</span>
+        <span className="ticker-divider">|</span>
+        <span className="ticker-text">
+          TRACKED TARGETS: {flights.length.toLocaleString()} AIRCRAFT · SATELLITE FEED: OPENSKY NETWORK · REFRESH RATE: REALTIME 60FPS
+        </span>
+      </div>
+
       <div className="status-pill">
         <span className={`status-dot ${status}`} />
         {statusLabel}

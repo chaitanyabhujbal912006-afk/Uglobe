@@ -65,22 +65,33 @@ function computeHeadingQuat(lat, lon, headingDeg, out) {
 }
 
 // ---------------------------------------------------------------------------
-// Altitude → high-tech colour palette
-//   0 m      → neon yellow  #ffe600  (HSL 55° / 1.0 / 0.72)
-//   12 000 m  → electric blue #2979ff  (HSL 215° / 1.0 / 0.72)
-//
-// Colors are boosted 2.5× above [0,1] so the bloom pass threshold (0.85) is
-// reliably exceeded — markers genuinely glow on the night side of Earth.
-// MeshBasicMaterial outputs the raw linear values without lighting attenuation,
-// making it functionally identical to a fully emissive material.
+// Altitude → Complex 4-Band Data Gradient
+//   0 – 4,000 m     → Vibrant Orange (20°)  to  Neon Green (140°)
+//   4,000 – 8,000 m → Neon Green (140°)     to  Electric Cyan (190°)
+//   8,000 – 12,000+m→ Electric Cyan (190°)  to  Deep Sapphire Blue (225°)
 // ---------------------------------------------------------------------------
 const _altColor = new THREE.Color()
 function altitudeToColor(altMeters) {
   const a = altMeters ?? 8000
   const t = Math.max(0, Math.min(1, a / 12000))
-  // Neon yellow (hue 0.153 = 55°) → electric blue (hue 0.597 = 215°)
-  _altColor.setHSL(0.153 + t * 0.444, 1.0, 0.72)
-  // Push luminance well above the bloom threshold — genuine HDR glow
+
+  let hueDeg
+  if (t < 0.33) {
+    // 0 to 4,000m: Vibrant Orange (20°) → Green (140°)
+    const k = t / 0.33
+    hueDeg = 20 + k * (140 - 20)
+  } else if (t < 0.66) {
+    // 4,000m to 8,000m: Green (140°) → Electric Cyan (190°)
+    const k = (t - 0.33) / 0.33
+    hueDeg = 140 + k * (190 - 140)
+  } else {
+    // 8,000m to 12,000m+: Electric Cyan (190°) → Deep Sapphire Blue (225°)
+    const k = Math.min(1, (t - 0.66) / 0.34)
+    hueDeg = 190 + k * (225 - 190)
+  }
+
+  _altColor.setHSL(hueDeg / 360, 1.0, 0.55)
+  // Push luminance above bloom threshold for genuine HDR glow
   _altColor.multiplyScalar(2.5)
   return _altColor
 }
@@ -277,6 +288,10 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     sunLight.position.set(5, 3, 5)
     scene.add(sunLight)
 
+    // Parent group for Earth + atmosphere + flights + trails (rotates together)
+    const globeGroup = new THREE.Group()
+    scene.add(globeGroup)
+
     // Earth — day/night ShaderMaterial
     const textureLoader = new THREE.TextureLoader()
     const earthGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64)
@@ -327,7 +342,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     })
 
     const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial)
-    scene.add(earthMesh)
+    globeGroup.add(earthMesh)
     textureLoader.load(EARTH_DAY_URL,   (tex) => { earthMaterial.uniforms.dayMap.value   = tex })
     textureLoader.load(EARTH_NIGHT_URL, (tex) => { earthMaterial.uniforms.nightMap.value = tex })
 
@@ -372,7 +387,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
         }
       `,
     })
-    scene.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial))
+    globeGroup.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial))
 
     // Outer atmosphere halo — BackSide shell
     const outerAtmosGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.045, 64, 64)
@@ -395,14 +410,71 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
         }
       `,
     })
-    scene.add(new THREE.Mesh(outerAtmosGeometry, outerAtmosMaterial))
+    globeGroup.add(new THREE.Mesh(outerAtmosGeometry, outerAtmosMaterial))
 
-    // Starfield
-    const starGeometry  = new THREE.BufferGeometry()
-    const starPositions = new Float32Array(3000 * 3)
-    for (let i = 0; i < starPositions.length; i++) starPositions[i] = (Math.random() - 0.5) * 200
-    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3))
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 })
+    // Cinematic Deep Space Nebula & Multi-Color Starfield (6,000 points)
+    const STAR_COUNT = 6000
+    const starGeometry = new THREE.BufferGeometry()
+    const starPos = new Float32Array(STAR_COUNT * 3)
+    const starCol = new Float32Array(STAR_COUNT * 3)
+    const starSiz = new Float32Array(STAR_COUNT)
+
+    const starColors = [
+      new THREE.Color('#ffffff'),
+      new THREE.Color('#80d8ff'),
+      new THREE.Color('#ea80fc'),
+      new THREE.Color('#ffd180'),
+      new THREE.Color('#82b1ff'),
+    ]
+
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const u = Math.random()
+      const v = Math.random()
+      const theta = u * 2.0 * Math.PI
+      const phi = Math.acos(2.0 * v - 1.0)
+      const r = 160 + Math.random() * 140
+
+      starPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta)
+      starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+      starPos[i * 3 + 2] = r * Math.cos(phi)
+
+      const c = starColors[Math.floor(Math.random() * starColors.length)]
+      starCol[i * 3]     = c.r
+      starCol[i * 3 + 1] = c.g
+      starCol[i * 3 + 2] = c.b
+
+      starSiz[i] = 1.0 + Math.random() * 2.8
+    }
+
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+    starGeometry.setAttribute('color',    new THREE.BufferAttribute(starCol, 3))
+    starGeometry.setAttribute('size',     new THREE.BufferAttribute(starSiz, 1))
+
+    const starMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {},
+      vertexShader: `
+        attribute vec3 color;
+        attribute float size;
+        varying vec3 vColor;
+        void main() {
+          vColor = color;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (180.0 / -mvPosition.z);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        void main() {
+          float d = length(gl_PointCoord - vec2(0.5));
+          if (d > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.0, d);
+          gl_FragColor = vec4(vColor, alpha * 0.85);
+        }
+      `,
+    })
     scene.add(new THREE.Points(starGeometry, starMaterial))
 
     // -----------------------------------------------------------------------
@@ -418,7 +490,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     const instancedMesh = new THREE.InstancedMesh(paperPlaneGeometry, planeMaterial, MAX_INSTANCES)
     instancedMesh.count = 0
     instancedMesh.frustumCulled = false
-    scene.add(instancedMesh)
+    globeGroup.add(instancedMesh)
     instancedMeshRef.current = instancedMesh
 
     // -----------------------------------------------------------------------
@@ -476,7 +548,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     const trailLines = new THREE.LineSegments(trailGeometry, trailMaterial)
     trailLines.frustumCulled = false
     trailLines.renderOrder   = 1
-    scene.add(trailLines)
+    globeGroup.add(trailLines)
     trailGeoRef.current = trailGeometry
     trailMatRef.current = trailMaterial
 
@@ -487,7 +559,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00e5ff, toneMapped: false })
     const selectionRing = new THREE.Mesh(ringGeometry, ringMaterial)
     selectionRing.visible = false
-    scene.add(selectionRing)
+    globeGroup.add(selectionRing)
     selectionRingRef.current = selectionRing
 
     // Bloom / post-processing
@@ -495,9 +567,9 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.4,   // strength
-      0.5,   // radius
-      0.85   // threshold — globe texture stays clean; HDR markers always bloom
+      0.42,  // strength
+      0.55,  // radius
+      0.80   // threshold — crisp dark earth; HDR trails, atmosphere & plane sparks bloom
     )
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
@@ -554,7 +626,7 @@ export default function Globe({ flights, filterQuery = '', onSelectFlight, onRes
     let animationFrameId
     function animate() {
       animationFrameId = requestAnimationFrame(animate)
-      earthMesh.rotation.y += 0.0006
+      globeGroup.rotation.y += 0.0006
       earthMaterial.uniforms.sunDirection.value.copy(SUN_DIR)
 
       trailMaterial.uniforms.uTime.value = performance.now() / 1000
