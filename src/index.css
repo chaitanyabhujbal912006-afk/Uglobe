@@ -1,19 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap');
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  border-radius: 0px !important; /* Eradicate softness: sharp corners globally */
 }
 
 html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #05070d;
+  background: #030408;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #e4e8f0;
+  font-family: 'JetBrains Mono', monospace;
+  color: #00f3ff;
+  letter-spacing: 0.04em;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app-shell {
@@ -27,273 +32,285 @@ body {
   inset: 0;
 }
 
+/* ---- Minimalist Tech HUD Panel Container ---- */
 .hud {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 24px;
+  left: 24px;
   z-index: 10;
-  pointer-events: none;
+  padding: 16px;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.25);
+  pointer-events: auto;
+  min-width: 320px;
 }
 
 .hud-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 16px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #ffffff;
 }
 
 .hud-subtitle {
-  font-size: 12px;
-  color: #8892a6;
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
   margin-top: 4px;
+  letter-spacing: 0.08em;
 }
 
 /* ---- Layer Selector ---- */
 .layer-selector {
   display: flex;
-  gap: 6px;
-  margin-top: 10px;
-  pointer-events: auto;
+  gap: 8px;
+  margin-top: 16px;
   flex-wrap: wrap;
 }
 
 .layer-btn {
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 20, 35, 0.7);
-  backdrop-filter: blur(8px);
-  color: #94a3b8;
+  padding: 6px 12px;
+  border: 1px solid #1e293b;
+  background: #000000;
+  color: #64748b;
   font-size: 11px;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.1s linear;
 }
 
 .layer-btn:hover {
-  background: rgba(30, 41, 59, 0.85);
-  color: #f1f5f9;
-  border-color: rgba(0, 229, 255, 0.3);
+  background: #0f172a;
+  color: #00f3ff;
+  border-color: #00f3ff;
 }
 
 .layer-btn.active {
-  background: rgba(0, 229, 255, 0.18);
-  color: #00e5ff;
-  border-color: rgba(0, 229, 255, 0.6);
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+  background: #00f3ff;
+  color: #000000;
+  border-color: #00f3ff;
+  font-weight: 800;
 }
 
-/* ---- Search ---- */
+/* ---- Search Row ---- */
 .search-row {
   display: flex;
   align-items: center;
-  margin-top: 12px;
-  pointer-events: auto;
+  margin-top: 16px;
   position: relative;
 }
 
 .search-input {
-  width: 220px;
-  padding: 7px 32px 7px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 20, 35, 0.75);
-  backdrop-filter: blur(10px);
-  color: #e4e8f0;
-  font-size: 12px;
-  font-family: inherit;
+  width: 100%;
+  padding: 8px 36px 8px 12px;
+  border: 1px solid #00f3ff;
+  background: #000000;
+  color: #ffffff;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
   outline: none;
-  transition: border-color 0.15s;
+  text-transform: uppercase;
 }
-.search-input::placeholder { color: #4a5568; }
-.search-input:focus { border-color: rgba(125, 211, 252, 0.5); }
+.search-input::placeholder { color: #334155; }
+.search-input:focus {
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+}
 
 .search-clear {
   position: absolute;
-  right: 8px;
+  right: 10px;
   background: none;
   border: none;
-  color: #8892a6;
+  color: #00f3ff;
   cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
-  line-height: 1;
-  pointer-events: auto;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
 }
-.search-clear:hover { color: #e4e8f0; }
 
 .search-count {
-  margin-top: 5px;
-  font-size: 11px;
-  color: #7dd3fc;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
+  margin-top: 8px;
+  font-size: 10px;
+  color: #00f3ff;
+  text-transform: uppercase;
 }
 
 /* ---- Reset View ---- */
 .reset-btn {
-  margin-top: 10px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 20, 35, 0.7);
-  backdrop-filter: blur(10px);
-  color: #8892a6;
-  font-size: 12px;
-  font-family: inherit;
+  margin-top: 16px;
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid #00f3ff;
+  background: #050505;
+  color: #00f3ff;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
   cursor: pointer;
-  pointer-events: auto;
-  transition: color 0.15s, border-color 0.15s;
-  display: block;
-}
-.reset-btn:hover {
-  color: #e4e8f0;
-  border-color: rgba(125, 211, 252, 0.4);
+  transition: all 0.1s linear;
 }
 
+.reset-btn:hover {
+  background: #00f3ff;
+  color: #000000;
+}
+
+/* ---- Status Pill ---- */
 .status-pill {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 24px;
+  right: 24px;
   z-index: 10;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(20, 24, 36, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  padding: 8px 16px;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  display: inline-block;
 }
-.status-dot.live { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-.status-dot.loading { background: #eab308; box-shadow: 0 0 8px #eab308; }
-.status-dot.error { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
-
-.info-panel {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  z-index: 10;
-  width: 280px;
-  padding: 16px;
-  border-radius: 12px;
-  background: rgba(20, 24, 36, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-family: "SF Mono", "JetBrains Mono", monospace;
-}
-
-.info-panel h3 {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 15px;
-  margin-bottom: 10px;
-  color: #7dd3fc;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 6px;
-  color: #c4cad6;
-}
-
-.info-row span:first-child {
-  color: #6b7280;
-}
-
-.flight-count {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  z-index: 10;
-  font-size: 12px;
-  color: #8892a6;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
-}
+.status-dot.live { background: #00f3ff; box-shadow: 0 0 8px #00f3ff; }
+.status-dot.loading { background: #ffaa00; }
+.status-dot.error { background: #ff0055; }
 
 /* ---- Altitude Spectrum Legend ---- */
 .altitude-legend {
   position: absolute;
-  top: 20px;
-  right: 180px;
+  top: 24px;
+  right: 220px;
   z-index: 10;
-  background: rgba(15, 20, 35, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
-  pointer-events: auto;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  padding: 12px 16px;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .legend-title {
   font-size: 9px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
   color: #64748b;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .legend-bar {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .legend-segment {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: #cbd5e1;
+  gap: 6px;
+  font-size: 10px;
+  color: #ffffff;
+  text-transform: uppercase;
 }
 
 .legend-segment .dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
   display: inline-block;
 }
-.legend-segment .dot.orange { background: #ff6600; box-shadow: 0 0 6px #ff6600; }
-.legend-segment .dot.green  { background: #00e676; box-shadow: 0 0 6px #00e676; }
-.legend-segment .dot.cyan   { background: #00e5ff; box-shadow: 0 0 6px #00e5ff; }
-.legend-segment .dot.blue   { background: #2962ff; box-shadow: 0 0 6px #2962ff; }
+.legend-segment .dot.orange { background: #ff6600; }
+.legend-segment .dot.green  { background: #00e676; }
+.legend-segment .dot.cyan   { background: #00e5ff; }
+.legend-segment .dot.blue   { background: #2962ff; }
 
 /* ---- Cybernetic Telemetry Ticker ---- */
 .telemetry-ticker {
   position: absolute;
-  bottom: 20px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  background: rgba(10, 14, 26, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 229, 255, 0.2);
-  border-radius: 999px;
-  padding: 6px 18px;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  padding: 10px 24px;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 0 15px rgba(0, 229, 255, 0.08);
+  gap: 12px;
+  white-space: nowrap;
 }
 
 .ticker-label {
-  color: #00e5ff;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  color: #00f3ff;
+  font-weight: 800;
+  letter-spacing: 0.1em;
 }
 
 .ticker-divider {
-  color: rgba(255, 255, 255, 0.2);
+  color: #334155;
 }
 
 .ticker-text {
   color: #94a3b8;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ---- Flight Info Panel ---- */
+.info-panel {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: 10;
+  width: 300px;
+  padding: 16px;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.info-panel h3 {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: #00f3ff;
+  text-transform: uppercase;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 6px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 8px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.info-row span:first-child {
+  color: #64748b;
+}
+
+.flight-count {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10;
+  font-size: 11px;
+  color: #00f3ff;
+  font-family: 'JetBrains Mono', monospace;
+  background: #050505;
+  border: 1px solid #00f3ff;
+  padding: 8px 16px;
+  text-transform: uppercase;
 }
