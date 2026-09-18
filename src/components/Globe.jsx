@@ -6,6 +6,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { latLongToVector3 } from '../utils/coords.js'
+import { playTargetLockSound } from '../utils/soundEngine.js'
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -272,6 +274,26 @@ function parseGeoJSONToLines(geojson, radius) {
 }
 
 // ---------------------------------------------------------------------------
+// Real-time solar position calculator (declination & UTC hour angle)
+// ---------------------------------------------------------------------------
+function getSolarDirection() {
+  const now = new Date()
+  const startOfYear = new Date(now.getFullYear(), 0, 0)
+  const diff = now - startOfYear
+  const oneDay = 1000 * 60 * 60 * 24
+  const dayOfYear = Math.floor(diff / oneDay)
+
+  const declination = -23.44 * Math.cos((2 * Math.PI / 365) * (dayOfYear + 10)) * (Math.PI / 180)
+  const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60
+  const lonRad = ((12 - utcHours) * 15) * (Math.PI / 180)
+
+  const x = Math.cos(declination) * Math.cos(lonRad)
+  const y = Math.sin(declination)
+  const z = Math.cos(declination) * Math.sin(-lonRad)
+  return new THREE.Vector3(x, y, z).normalize()
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function Globe({
@@ -280,8 +302,15 @@ export default function Globe({
   satellites = [],
   activeLayer = 'all',
   filterQuery = '',
-  onSelectFlight,
+  minAltitude = 0,
+  maxAltitude = 20000,
+  minMagnitude = 0,
+  renderMode = 'grid', // 'grid' | 'solar' | 'night'
+  cinematicMode = false,
+  selectedTarget = null,
+  onSelectTarget,
   onResetReady,
+  onFlyToTargetReady,
 }) {
   const containerRef       = useRef(null)
   const flightsRef         = useRef(flights)
@@ -289,27 +318,54 @@ export default function Globe({
   const satellitesRef      = useRef(satellites)
   const activeLayerRef     = useRef(activeLayer)
   const filterQueryRef     = useRef(filterQuery)
+  const minAltitudeRef     = useRef(minAltitude)
+  const maxAltitudeRef     = useRef(maxAltitude)
+  const minMagnitudeRef    = useRef(minMagnitude)
+  const renderModeRef      = useRef(renderMode)
+  const cinematicModeRef   = useRef(cinematicMode)
+
+  const visibleFlightsRef    = useRef([])
+  const visibleSatellitesRef = useRef([])
+  const visibleEarthquakesRef= useRef([])
 
   const instancedMeshRef   = useRef(null)
   const satellitesMeshRef  = useRef(null)
   const earthquakesMeshRef = useRef(null)
   const arcsMeshRef        = useRef(null)
   const selectionRingRef   = useRef(null)
-  const selectedIdxRef     = useRef(-1)
   const trailGeoRef        = useRef(null)
   const trailMatRef        = useRef(null)
+  const globeGroupRef      = useRef(null)
+  const cameraRef          = useRef(null)
+  const controlsRef        = useRef(null)
+  const earthMatRef        = useRef(null)
+
+  const flyToStateRef      = useRef(null)
 
   useEffect(() => {
-    flightsRef.current     = flights
-    earthquakesRef.current = earthquakes
-    satellitesRef.current  = satellites
-    activeLayerRef.current = activeLayer
-    filterQueryRef.current = filterQuery
+    flightsRef.current      = flights
+    earthquakesRef.current  = earthquakes
+    satellitesRef.current   = satellites
+    activeLayerRef.current  = activeLayer
+    filterQueryRef.current  = filterQuery
+    minAltitudeRef.current  = minAltitude
+    maxAltitudeRef.current  = maxAltitude
+    minMagnitudeRef.current = minMagnitude
+    renderModeRef.current   = renderMode
+    cinematicModeRef.current= cinematicMode
     updateMarkers()
-  }, [flights, earthquakes, satellites, activeLayer, filterQuery])
+  }, [flights, earthquakes, satellites, activeLayer, filterQuery, minAltitude, maxAltitude, minMagnitude, renderMode, cinematicMode])
+
+  useEffect(() => {
+    if (selectedTarget) {
+      positionSelectionRingForTarget(selectedTarget)
+    } else if (selectionRingRef.current) {
+      selectionRingRef.current.visible = false
+    }
+  }, [selectedTarget])
 
   // -------------------------------------------------------------------------
-  // updateMarkers — one call per data cycle; updates all active 3D layers
+  // updateMarkers — updates 3D meshes & populates visible target index arrays
   // -------------------------------------------------------------------------
   function updateMarkers() {
     const layer = activeLayerRef.current
@@ -317,13 +373,29 @@ export default function Globe({
     const showSats    = layer === 'all' || layer === 'satellites'
     const showEqs     = layer === 'all' || layer === 'earthquakes'
 
+    const minAlt = minAltitudeRef.current
+    const maxAlt = maxAltitudeRef.current
+    const minMag = minMagnitudeRef.current
+    const query  = (filterQueryRef.current || '').toLowerCase().trim()
+
     // --- 1. Flights & Trails ---
     const mesh = instancedMeshRef.current
     if (mesh) {
       const currentFlights = flightsRef.current
-      const query = (filterQueryRef.current || '').toLowerCase().trim()
-      const n = showFlights ? Math.min(currentFlights.length, MAX_INSTANCES) : 0
+      const filtered = showFlights
+        ? currentFlights.filter((f) => {
+            const alt = f.altitude ?? 8000
+            if (alt < minAlt || alt > maxAlt) return false
+            if (!query) return true
+            return (
+              (f.callsign || '').toLowerCase().includes(query) ||
+              (f.originCountry || '').toLowerCase().includes(query)
+            )
+          })
+        : []
 
+      visibleFlightsRef.current = filtered
+      const n = Math.min(filtered.length, MAX_INSTANCES)
       mesh.count = n
 
       const trailGeo = trailGeoRef.current
@@ -332,35 +404,25 @@ export default function Globe({
       const tAlp = trailGeo?.attributes?.aAlpha?.array
 
       for (let i = 0; i < n; i++) {
-        const f = currentFlights[i]
+        const f = filtered[i]
         const raw = latLongToVector3(f.latitude, f.longitude, GLOBE_RADIUS * 1.012)
         _pos.set(raw.x, raw.y, raw.z)
 
         computeHeadingQuat(f.latitude, f.longitude, f.heading ?? 0, _quat)
-
-        const matched =
-          !query ||
-          (f.callsign      || '').toLowerCase().includes(query) ||
-          (f.originCountry || '').toLowerCase().includes(query)
-
-        const s = matched ? 1 : 0.15
-        _scale.set(s, s, s)
+        _scale.set(1, 1, 1)
         _mat.compose(_pos, _quat, _scale)
         mesh.setMatrixAt(i, _mat)
 
         altitudeToColor(f.altitude)
         const tr = _altColor.r, tg = _altColor.g, tb = _altColor.b
-
-        _color.copy(_altColor)
-        if (!matched) _color.multiplyScalar(0.08)
-        mesh.setColorAt(i, _color)
+        mesh.setColorAt(i, _altColor)
 
         if (tPos) {
           const v0 = i * 2
           const v1 = i * 2 + 1
 
           tPos[v0 * 3] = _pos.x; tPos[v0 * 3 + 1] = _pos.y; tPos[v0 * 3 + 2] = _pos.z
-          tAlp[v0] = matched ? 1.0 : 0.0
+          tAlp[v0] = 1.0
 
           _trailAxis.crossVectors(_hPos, _hDir).normalize()
           _trailQRot.setFromAxisAngle(_trailAxis, -TRAIL_ANGLE)
@@ -394,11 +456,22 @@ export default function Globe({
     const satMesh = satellitesMeshRef.current
     if (satMesh) {
       const currentSats = satellitesRef.current
-      const nSat = showSats ? Math.min(currentSats.length, 300) : 0
+      const filtered = showSats
+        ? currentSats.filter((s) => {
+            if (!query) return true
+            return (
+              (s.name || '').toLowerCase().includes(query) ||
+              String(s.noradId || '').includes(query)
+            )
+          })
+        : []
+
+      visibleSatellitesRef.current = filtered
+      const nSat = Math.min(filtered.length, 300)
       satMesh.count = nSat
 
       for (let i = 0; i < nSat; i++) {
-        const s = currentSats[i]
+        const s = filtered[i]
         const rOrbit = GLOBE_RADIUS * (1.16 + (s.altitudeKm / 3500))
         const raw = latLongToVector3(s.latitude, s.longitude, rOrbit)
         _pos.set(raw.x, raw.y, raw.z)
@@ -414,15 +487,24 @@ export default function Globe({
       if (satMesh.instanceColor) satMesh.instanceColor.needsUpdate = true
     }
 
-    // --- 4. Earthquakes (Pulsing Surface Rings) ---
+    // --- 4. Earthquakes ---
     const eqMesh = earthquakesMeshRef.current
     if (eqMesh) {
       const currentEqs = earthquakesRef.current
-      const nEq = showEqs ? Math.min(currentEqs.length, 100) : 0
+      const filtered = showEqs
+        ? currentEqs.filter((eq) => {
+            if (eq.magnitude < minMag) return false
+            if (!query) return true
+            return (eq.title || '').toLowerCase().includes(query)
+          })
+        : []
+
+      visibleEarthquakesRef.current = filtered
+      const nEq = Math.min(filtered.length, 100)
       eqMesh.count = nEq
 
       for (let i = 0; i < nEq; i++) {
-        const eq = currentEqs[i]
+        const eq = filtered[i]
         const raw = latLongToVector3(eq.latitude, eq.longitude, GLOBE_RADIUS * 1.004)
         _pos.set(raw.x, raw.y, raw.z)
         _hPos.set(raw.x, raw.y, raw.z).normalize()
@@ -441,27 +523,68 @@ export default function Globe({
       if (eqMesh.instanceColor) eqMesh.instanceColor.needsUpdate = true
     }
 
-    positionSelectionRing(selectedIdxRef.current)
+    if (selectedTarget) {
+      positionSelectionRingForTarget(selectedTarget)
+    }
   }
 
   // -------------------------------------------------------------------------
-  // positionSelectionRing
+  // positionSelectionRingForTarget — position target lock reticle ring
   // -------------------------------------------------------------------------
-  function positionSelectionRing(idx) {
+  function positionSelectionRingForTarget(target) {
     const ring = selectionRingRef.current
-    if (!ring) return
-    if (idx < 0 || idx >= (flightsRef.current?.length ?? 0)) {
-      ring.visible = false
+    if (!ring || !target || target.latitude == null || target.longitude == null) {
+      if (ring) ring.visible = false
       return
     }
-    const f = flightsRef.current[idx]
-    const raw = latLongToVector3(f.latitude, f.longitude, GLOBE_RADIUS * 1.013)
+
+    let r = GLOBE_RADIUS * 1.013
+    if (target.type === 'satellite' || target.noradId) {
+      r = GLOBE_RADIUS * (1.16 + ((target.altitudeKm || 500) / 3500))
+    } else if (target.type === 'earthquake' || target.magnitude) {
+      r = GLOBE_RADIUS * 1.005
+    }
+
+    const raw = latLongToVector3(target.latitude, target.longitude, r)
     _pos.set(raw.x, raw.y, raw.z)
     _hPos.set(raw.x, raw.y, raw.z).normalize()
     _quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _hPos)
     ring.position.copy(_pos)
     ring.quaternion.copy(_quat)
     ring.visible = true
+  }
+
+  // -------------------------------------------------------------------------
+  // flyToTarget — smooth camera fly-to tween
+  // -------------------------------------------------------------------------
+  function flyToTarget(target) {
+    if (!target || target.latitude == null || target.longitude == null) return
+    const camera = cameraRef.current
+    const controls = controlsRef.current
+    if (!camera || !controls) return
+
+    let r = GLOBE_RADIUS * 1.013
+    if (target.type === 'satellite') r = GLOBE_RADIUS * (1.16 + ((target.altitudeKm || 500) / 3500))
+
+    const targetLocal = latLongToVector3(target.latitude, target.longitude, r)
+    // Convert target local point to world space if globe rotated
+    const targetWorld = targetLocal.clone()
+    if (globeGroupRef.current) {
+      targetWorld.applyMatrix4(globeGroupRef.current.matrixWorld)
+    }
+
+    const dist = targetWorld.length() * 1.85
+    const camPos = targetWorld.clone().normalize().multiplyScalar(Math.max(3.6, dist))
+
+    flyToStateRef.current = {
+      fromPos: camera.position.clone(),
+      toPos: camPos,
+      fromTarget: controls.target.clone(),
+      toTarget: _origin.clone(),
+      startTime: performance.now() / 1000,
+      duration: 1.25,
+    }
+    controls.enabled = false
   }
 
   // -------------------------------------------------------------------------
@@ -475,6 +598,7 @@ export default function Globe({
     const scene  = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
     camera.position.set(0, 0, 6)
+    cameraRef.current = camera
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(width, height)
@@ -489,6 +613,7 @@ export default function Globe({
     controls.minDistance = 3
     controls.maxDistance = 15
     controls.rotateSpeed = 0.4
+    controlsRef.current = controls
 
     // Lighting
     scene.add(new THREE.AmbientLight(0x445577, 1.2))
@@ -496,15 +621,17 @@ export default function Globe({
     sunLight.position.set(5, 3, 5)
     scene.add(sunLight)
 
-    // Parent group for Earth + atmosphere + flights + trails (rotates together)
+    // Parent group for Earth + atmosphere + flights + trails
     const globeGroup = new THREE.Group()
     scene.add(globeGroup)
+    globeGroupRef.current = globeGroup
 
-    // Earth — Stark, modern negative-space globe with electric blue grid
+    // Earth — Shader supporting Grid, Solar Day/Night, and High-Contrast Night modes
     const earthGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64)
     const earthMaterial = new THREE.ShaderMaterial({
       uniforms: {
         sunDirection: { value: SUN_DIR.clone() },
+        uRenderMode:  { value: 0.0 }, // 0 = grid, 1 = solar, 2 = night
       },
       vertexShader: `
         varying vec2 vUv;
@@ -520,105 +647,55 @@ export default function Globe({
       `,
       fragmentShader: `
         uniform vec3 sunDirection;
+        uniform float uRenderMode;
         varying vec2 vUv;
         varying vec3 vWorldNormal;
         varying vec3 vViewDir;
 
         void main() {
-          // Procedural lat/lon coordinate grid
           vec2 gridLines = abs(fract(vUv * vec2(24.0, 12.0) - 0.5) - 0.5) / fwidth(vUv * vec2(24.0, 12.0));
           float line = min(gridLines.x, gridLines.y);
           float grid = 1.0 - min(line, 1.0);
 
-          // Dark negative space base color
           vec3 baseColor = vec3(0.015, 0.03, 0.07);
-
-          // Electric cyan-blue grid lines
           vec3 gridColor = vec3(0.0, 0.85, 1.0) * grid * 0.45;
 
-          // Smooth Fresnel edge highlight
           float dotNV = dot(vWorldNormal, vViewDir);
           float fresnel = pow(1.0 - max(0.0, dotNV), 3.0);
           vec3 rimGlow = vec3(0.0, 0.65, 1.0) * fresnel * 0.4;
 
-          // Sun lighting
           float sunDot = dot(vWorldNormal, sunDirection);
-          float sunFactor = smoothstep(-0.2, 0.3, sunDot) * 0.4 + 0.6;
+          float dayFactor = smoothstep(-0.2, 0.3, sunDot);
 
-          vec3 finalCol = (baseColor + gridColor + rimGlow) * sunFactor;
+          vec3 finalCol;
+          if (uRenderMode > 1.5) {
+            // High-contrast Night mode
+            finalCol = (baseColor + gridColor * 0.7 + rimGlow * 1.5);
+          } else if (uRenderMode > 0.5) {
+            // Solar Day/Night Real-time mode
+            vec3 dayCol = vec3(0.05, 0.25, 0.45) + gridColor * 0.2;
+            vec3 nightCol = vec3(0.005, 0.012, 0.03) + rimGlow;
+            finalCol = mix(nightCol, dayCol, dayFactor) + gridColor * 0.2;
+          } else {
+            // Cyber Grid default mode
+            finalCol = (baseColor + gridColor + rimGlow) * (dayFactor * 0.4 + 0.6);
+          }
+
           gl_FragColor = vec4(finalCol, 1.0);
         }
       `,
     })
-
     const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial)
     globeGroup.add(earthMesh)
+    earthMatRef.current = earthMaterial
 
-    // GeoJSON Continental Outlines (Wireframe vector map at ~15% opacity electric blue)
-    fetch('/land.json')
-      .then((res) => res.json())
-      .then((geojson) => {
-        const landGeo = parseGeoJSONToLines(geojson, GLOBE_RADIUS * 1.002)
-        const landMat = new THREE.LineBasicMaterial({
-          color: 0x00f3ff,
-          transparent: true,
-          opacity: 0.15,
-          depthWrite: false,
-        })
-        const landLines = new THREE.LineSegments(landGeo, landMat)
-        globeGroup.add(landLines)
-      })
-      .catch((err) => console.warn('Could not load GeoJSON landmass outlines:', err))
-
-    // Fresnel Atmosphere Glow — FrontSide sphere around Earth (radius 1.025 * GLOBE_RADIUS)
-    const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64)
-    const atmosphereMaterial = new THREE.ShaderMaterial({
+    // Atmospheric Glow Shell
+    const atmoGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.03, 64, 64)
+    const atmoMaterial = new THREE.ShaderMaterial({
       transparent: true,
-      side: THREE.FrontSide,
       depthWrite: false,
-      uniforms: {
-        sunDirection: { value: SUN_DIR.clone() },
-      },
-      vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vWorldNormal;
-        void main() {
-          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-          vNormal = normalize(mat3(modelMatrix) * normal);
-          vWorldNormal = vNormal;
-          vViewDir = normalize(cameraPosition - worldPosition.xyz);
-          gl_Position = projectionMatrix * viewMatrix * worldPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 sunDirection;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vWorldNormal;
-        void main() {
-          float dotNV = dot(vNormal, vViewDir);
-          float fresnel = pow(1.0 - max(0.0, dotNV), 3.2);
-          
-          float sunDot = dot(vWorldNormal, sunDirection);
-          float sunFactor = smoothstep(-0.3, 0.4, sunDot) * 0.6 + 0.4;
-          
-          // Electric blue cyan atmosphere glow
-          vec3 atmosColor = vec3(0.12, 0.65, 1.0) * (0.8 + fresnel * 0.6) * sunFactor;
-          float alpha = fresnel * 0.88 * sunFactor;
-          
-          gl_FragColor = vec4(atmosColor, alpha);
-        }
-      `,
-    })
-    globeGroup.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial))
-
-    // Outer atmosphere halo — BackSide shell
-    const outerAtmosGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.045, 64, 64)
-    const outerAtmosMaterial = new THREE.ShaderMaterial({
-      transparent: true,
       side: THREE.BackSide,
-      uniforms: {},
+      blending: THREE.AdditiveBlending,
       vertexShader: `
         varying vec3 vNormal;
         void main() {
@@ -629,63 +706,64 @@ export default function Globe({
       fragmentShader: `
         varying vec3 vNormal;
         void main() {
-          float intensity = pow(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0) * 1.2;
-          gl_FragColor = vec4(0.1, 0.55, 1.0, 1.0) * intensity;
+          float intensity = pow(0.62 - dot(vNormal, vec3(0, 0, 1.0)), 2.8);
+          gl_FragColor = vec4(0.0, 0.75, 1.0, 1.0) * intensity * 0.55;
         }
       `,
     })
-    globeGroup.add(new THREE.Mesh(outerAtmosGeometry, outerAtmosMaterial))
+    globeGroup.add(new THREE.Mesh(atmoGeometry, atmoMaterial))
 
-    // Cinematic Deep Space Nebula & Multi-Color Starfield (6,000 points)
-    const STAR_COUNT = 6000
-    const starGeometry = new THREE.BufferGeometry()
-    const starPos = new Float32Array(STAR_COUNT * 3)
-    const starCol = new Float32Array(STAR_COUNT * 3)
-    const starSiz = new Float32Array(STAR_COUNT)
+    // GeoJSON Continental Outlines
+    fetch('/continents.geojson')
+      .then((res) => res.json())
+      .then((geojson) => {
+        const geojsonGeometry = parseGeoJSONToLines(geojson, GLOBE_RADIUS * 1.002)
+        const geojsonMaterial = new THREE.LineBasicMaterial({
+          color: 0x00f3ff,
+          transparent: true,
+          opacity: 0.28,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
+        })
+        const lineSegments = new THREE.LineSegments(geojsonGeometry, geojsonMaterial)
+        globeGroup.add(lineSegments)
+      })
+      .catch((err) => console.warn('Failed to load continents.geojson:', err))
 
-    const starColors = [
-      new THREE.Color('#ffffff'),
-      new THREE.Color('#80d8ff'),
-      new THREE.Color('#ea80fc'),
-      new THREE.Color('#ffd180'),
-      new THREE.Color('#82b1ff'),
-    ]
+    // Background Starfield
+    const starCount = 3500
+    const starPositions = new Float32Array(starCount * 3)
+    const starColors    = new Float32Array(starCount * 3)
+    for (let i = 0; i < starCount; i++) {
+      const r     = 180 + Math.random() * 220
+      const theta = Math.random() * Math.PI * 2
+      const phi   = Math.acos(2 * Math.random() - 1)
+      starPositions[i * 3]     = r * Math.sin(phi) * Math.cos(theta)
+      starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+      starPositions[i * 3 + 2] = r * Math.cos(phi)
 
-    for (let i = 0; i < STAR_COUNT; i++) {
-      const u = Math.random()
-      const v = Math.random()
-      const theta = u * 2.0 * Math.PI
-      const phi = Math.acos(2.0 * v - 1.0)
-      const r = 160 + Math.random() * 140
-
-      starPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta)
-      starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
-      starPos[i * 3 + 2] = r * Math.cos(phi)
-
-      const c = starColors[Math.floor(Math.random() * starColors.length)]
-      starCol[i * 3]     = c.r
-      starCol[i * 3 + 1] = c.g
-      starCol[i * 3 + 2] = c.b
-
-      starSiz[i] = 1.0 + Math.random() * 2.8
+      const h = 0.52 + (Math.random() - 0.5) * 0.2
+      const c = new THREE.Color().setHSL(h, 0.8, 0.7)
+      starColors[i * 3]     = c.r
+      starColors[i * 3 + 1] = c.g
+      starColors[i * 3 + 2] = c.b
     }
 
-    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-    starGeometry.setAttribute('color',    new THREE.BufferAttribute(starCol, 3))
-    starGeometry.setAttribute('size',     new THREE.BufferAttribute(starSiz, 1))
+    const starGeometry = new THREE.BufferGeometry()
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3))
+    starGeometry.setAttribute('color',    new THREE.BufferAttribute(starColors, 3))
 
     const starMaterial = new THREE.ShaderMaterial({
       transparent: true,
-      depthWrite: false,
-      uniforms: {},
+      depthWrite:  false,
+      blending:    THREE.AdditiveBlending,
       vertexShader: `
         attribute vec3 color;
-        attribute float size;
         varying vec3 vColor;
         void main() {
           vColor = color;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (180.0 / -mvPosition.z);
+          gl_PointSize = (1.5 + sin(position.x * 0.05)) * (250.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
@@ -695,31 +773,26 @@ export default function Globe({
           float d = length(gl_PointCoord - vec2(0.5));
           if (d > 0.5) discard;
           float alpha = smoothstep(0.5, 0.0, d);
-          gl_FragColor = vec4(vColor, alpha * 0.85);
+          gl_FragColor = vec4(vColor * alpha * 0.8, alpha);
         }
       `,
     })
     scene.add(new THREE.Points(starGeometry, starMaterial))
 
-    // -----------------------------------------------------------------------
-    // Aircraft markers — sleek low-poly paper-airplane geometry
-    // -----------------------------------------------------------------------
+    // Aircraft InstancedMesh
     const paperPlaneGeometry = createPaperAirplaneGeometry()
     const planeMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,    // instance colour multiplies against white → preserves hue
-      side: THREE.DoubleSide, // double-sided so folded wings are visible from all camera angles
-      toneMapped: false,  // bypass tone-mapping so HDR values reach the bloom pass raw
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      toneMapped: false,
     })
-
     const instancedMesh = new THREE.InstancedMesh(paperPlaneGeometry, planeMaterial, MAX_INSTANCES)
     instancedMesh.count = 0
     instancedMesh.frustumCulled = false
     globeGroup.add(instancedMesh)
     instancedMeshRef.current = instancedMesh
 
-    // -----------------------------------------------------------------------
-    // Flight trails — single LineSegments draw call for all aircraft
-    // -----------------------------------------------------------------------
+    // Flight Trails
     const TRAIL_VERTS  = MAX_INSTANCES * 2
     const trailPosArr  = new Float32Array(TRAIL_VERTS * 3)
     const trailColArr  = new Float32Array(TRAIL_VERTS * 3)
@@ -763,7 +836,6 @@ export default function Globe({
           float pulse = 0.78 + 0.22 * sin(uTime * 2.8 - vAlpha * 6.28);
           float a = vAlpha * pulse;
           if (a < 0.005) discard;
-          // Additive blending: output color multiplied by alpha gradient
           gl_FragColor = vec4(vColor * a * 0.85, a);
         }
       `,
@@ -776,9 +848,7 @@ export default function Globe({
     trailGeoRef.current = trailGeometry
     trailMatRef.current = trailMaterial
 
-    // -----------------------------------------------------------------------
-    // 3D Glowing Great-Circle Arcs
-    // -----------------------------------------------------------------------
+    // 3D Great-Circle Arcs
     const arcsGeometry = create3DArcLines(GLOBE_RADIUS)
     const arcsMaterial = new THREE.LineBasicMaterial({
       color: 0x00e5ff,
@@ -791,9 +861,7 @@ export default function Globe({
     globeGroup.add(arcsMesh)
     arcsMeshRef.current = arcsMesh
 
-    // -----------------------------------------------------------------------
-    // Satellites InstancedMesh (Orbital Altitude)
-    // -----------------------------------------------------------------------
+    // Satellites InstancedMesh
     const satGeometry = new THREE.OctahedronGeometry(0.014)
     const satMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -804,17 +872,13 @@ export default function Globe({
     globeGroup.add(satellitesMesh)
     satellitesMeshRef.current = satellitesMesh
 
-    // -----------------------------------------------------------------------
-    // Seismic Event Markers InstancedMesh (Low-Poly Tetrahedron & Emissive Neon Yellow Shader)
-    // -----------------------------------------------------------------------
+    // Earthquakes InstancedMesh
     const eqGeometry = new THREE.TetrahedronGeometry(0.018, 0)
     const eqMaterial = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       toneMapped: false,
-      uniforms: {
-        uTime: { value: 0 },
-      },
+      uniforms: { uTime: { value: 0 } },
       vertexShader: `
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -830,7 +894,6 @@ export default function Globe({
         varying vec3 vNormal;
         varying vec3 vPosition;
         void main() {
-          // Emissive neon yellow (#ffe600 / #ffff00) with subtle pulse wave
           vec3 neonYellow = vec3(1.0, 0.9, 0.0) * 2.8;
           float pulse = 0.85 + 0.15 * sin(uTime * 4.0 + vPosition.x * 10.0);
           gl_FragColor = vec4(neonYellow * pulse, 0.95);
@@ -844,7 +907,7 @@ export default function Globe({
 
     updateMarkers()
 
-    // Selection ring
+    // 3D Holographic Selection Ring
     const ringGeometry = new THREE.TorusGeometry(0.048, 0.007, 8, 48)
     const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00e5ff, toneMapped: false })
     const selectionRing = new THREE.Mesh(ringGeometry, ringMaterial)
@@ -857,14 +920,14 @@ export default function Globe({
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.42,  // strength
-      0.55,  // radius
-      0.80   // threshold — crisp dark earth; HDR trails, atmosphere & plane sparks bloom
+      0.42,
+      0.55,
+      0.80
     )
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
 
-    // Click-to-select
+    // Universal Raycasting target selection for Flights, Satellites, and Earthquakes
     const raycaster = new THREE.Raycaster()
     const mouse = new THREE.Vector2()
 
@@ -873,18 +936,38 @@ export default function Globe({
       mouse.x =  ((event.clientX - rect.left) / rect.width)  * 2 - 1
       mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1
       raycaster.setFromCamera(mouse, camera)
-      const hits = raycaster.intersectObject(instancedMesh)
+
+      const checkObjects = []
+      if (instancedMesh.count > 0) checkObjects.push(instancedMesh)
+      if (satellitesMesh.count > 0) checkObjects.push(satellitesMesh)
+      if (earthquakesMesh.count > 0) checkObjects.push(earthquakesMesh)
+
+      const hits = raycaster.intersectObjects(checkObjects, false)
       if (hits.length > 0) {
-        const idx = hits[0].instanceId
-        const flight = flightsRef.current[idx]
-        if (flight) {
-          selectedIdxRef.current = idx
-          positionSelectionRing(idx)
-          onSelectFlight(flight)
+        const hit = hits[0]
+        const obj = hit.object
+        const idx = hit.instanceId
+
+        let target = null
+        if (obj === instancedMesh) {
+          const f = visibleFlightsRef.current[idx]
+          if (f) target = { ...f, type: 'flight' }
+        } else if (obj === satellitesMesh) {
+          const s = visibleSatellitesRef.current[idx]
+          if (s) target = { ...s, type: 'satellite' }
+        } else if (obj === earthquakesMesh) {
+          const eq = visibleEarthquakesRef.current[idx]
+          if (eq) target = { ...eq, type: 'earthquake' }
+        }
+
+        if (target) {
+          playTargetLockSound()
+          positionSelectionRingForTarget(target)
+          if (onSelectTarget) onSelectTarget(target)
         }
       } else {
-        selectedIdxRef.current = -1
-        selectionRing.visible  = false
+        if (selectionRingRef.current) selectionRingRef.current.visible = false
+        if (onSelectTarget) onSelectTarget(null)
       }
     }
     renderer.domElement.addEventListener('click', handleClick)
@@ -911,24 +994,51 @@ export default function Globe({
       controls.enabled = false
     }
     if (onResetReady) onResetReady(triggerReset)
+    if (onFlyToTargetReady) onFlyToTargetReady(flyToTarget)
 
     // Animation loop
     let animationFrameId
     function animate() {
       animationFrameId = requestAnimationFrame(animate)
-      globeGroup.rotation.y += 0.0006
-      earthMaterial.uniforms.sunDirection.value.copy(SUN_DIR)
+
+      // Cinematic Mode or Normal Rotation
+      const rotSpeed = cinematicModeRef.current ? 0.0024 : 0.0006
+      globeGroup.rotation.y += rotSpeed
+
+      // Render mode shader uniform update
+      if (earthMatRef.current) {
+        const modeVal = renderModeRef.current === 'night' ? 2.0 : renderModeRef.current === 'solar' ? 1.0 : 0.0
+        earthMatRef.current.uniforms.uRenderMode.value = modeVal
+        if (renderModeRef.current === 'solar') {
+          earthMatRef.current.uniforms.sunDirection.value.copy(getSolarDirection())
+        } else {
+          earthMatRef.current.uniforms.sunDirection.value.copy(SUN_DIR)
+        }
+      }
 
       const nowSec = performance.now() / 1000
       trailMaterial.uniforms.uTime.value = nowSec
       eqMaterial.uniforms.uTime.value    = nowSec
 
       if (selectionRing.visible) {
-        const pulse = 1 + Math.sin(performance.now() * 0.003) * 0.07
+        const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.08
         selectionRing.scale.setScalar(pulse)
       }
 
-      if (resetState) {
+      // Fly-To or Reset Camera Tweens
+      if (flyToStateRef.current) {
+        const st = flyToStateRef.current
+        const elapsed = performance.now() / 1000 - st.startTime
+        const t = Math.min(elapsed / st.duration, 1)
+        const ease = t * t * (3 - 2 * t)
+        camera.position.lerpVectors(st.fromPos, st.toPos, ease)
+        controls.target.lerpVectors(st.fromTarget, st.toTarget, ease)
+        controls.update()
+        if (t >= 1) {
+          controls.enabled = true
+          flyToStateRef.current = null
+        }
+      } else if (resetState) {
         const elapsed = performance.now() / 1000 - resetState.startTime
         const t    = Math.min(elapsed / RESET_DURATION, 1)
         const ease = t * t * (3 - 2 * t)
