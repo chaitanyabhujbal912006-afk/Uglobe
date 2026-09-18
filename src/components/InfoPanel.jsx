@@ -1,12 +1,13 @@
-export default function InfoPanel({ flight }) {
-  if (!flight) return null
+export default function InfoPanel({ target, onClearTarget, onFlyToTarget }) {
+  if (!target) return null
 
-  // Key derived from telemetry state to trigger 100ms hardware terminal flash animation on update
-  const updateKey = `${flight.callsign || flight.id || 'acft'}-${flight.altitude}-${flight.velocity}-${flight.latitude?.toFixed(2)}-${flight.longitude?.toFixed(2)}`
+  const targetType = target.type || (target.noradId ? 'satellite' : target.magnitude ? 'earthquake' : 'flight')
+
+  const updateKey = `${target.id || target.callsign || target.name}-${target.latitude?.toFixed(2)}-${target.longitude?.toFixed(2)}`
 
   return (
     <div className="info-panel">
-      {/* Decorative Geometric SVG Corner Accents (Electric Blue Crosshairs/Circuit Lines) */}
+      {/* Corner Accents */}
       <svg className="corner-accent top-left" width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M 0 6 V 0 H 6" stroke="#00f3ff" strokeWidth="2" />
         <path d="M 0 0 L 5 5" stroke="#00f3ff" strokeWidth="1" />
@@ -29,47 +30,124 @@ export default function InfoPanel({ flight }) {
       </svg>
 
       <div className="info-panel-header">
-        <div className="telemetry-header-title">TELEMETRY READOUT</div>
-        <div className="telemetry-target-id">{flight.callsign || flight.id || 'TARGET LOCKED'}</div>
+        <div className="telemetry-header-title">
+          {targetType === 'flight' && '✈️ AIRCRAFT TELEMETRY'}
+          {targetType === 'satellite' && '🛰️ SATELLITE TELEMETRY'}
+          {targetType === 'earthquake' && '🌋 SEISMIC TELEMETRY'}
+        </div>
+        <div className="telemetry-header-actions">
+          {onFlyToTarget && (
+            <button className="telemetry-act-btn fly" onClick={() => onFlyToTarget(target)} title="Fly Camera to Target">
+              🎯 LOCK
+            </button>
+          )}
+          {onClearTarget && (
+            <button className="telemetry-act-btn close" onClick={onClearTarget} title="Clear Target">
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div key={updateKey} className="terminal-refresh info-content">
-        <div className="info-row">
-          <span className="telemetry-label">CALLSIGN</span>
-          <span className="telemetry-value">{flight.callsign || 'N/A'}</span>
-        </div>
+        {targetType === 'flight' && (
+          <>
+            <div className="info-row">
+              <span className="telemetry-label">CALLSIGN</span>
+              <span className="telemetry-value highlight">{target.callsign || 'N/A'}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">ORIGIN</span>
+              <span className="telemetry-value">{target.originCountry || 'UNKNOWN'}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">ALTITUDE</span>
+              <span className="telemetry-value">
+                {target.altitude != null ? `${Math.round(target.altitude).toLocaleString()} M` : '—'}
+              </span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">VELOCITY</span>
+              <span className="telemetry-value">
+                {target.velocity != null ? `${Math.round(target.velocity * 3.6).toLocaleString()} KM/H` : '—'}
+              </span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">HEADING</span>
+              <span className="telemetry-value">
+                {target.heading != null ? `${Math.round(target.heading)}°` : '—'}
+              </span>
+            </div>
+          </>
+        )}
+
+        {targetType === 'satellite' && (
+          <>
+            <div className="info-row">
+              <span className="telemetry-label">NAME</span>
+              <span className="telemetry-value highlight">{target.name}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">NORAD ID</span>
+              <span className="telemetry-value">{target.noradId}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">ALTITUDE</span>
+              <span className="telemetry-value">{target.altitudeKm?.toLocaleString()} KM</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">VELOCITY</span>
+              <span className="telemetry-value">{target.velocityKmS} KM/S</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">ORBIT PERIOD</span>
+              <span className="telemetry-value">{target.orbitPeriodMin} MIN</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">INCLINATION</span>
+              <span className="telemetry-value">{target.inclinationDeg}°</span>
+            </div>
+          </>
+        )}
+
+        {targetType === 'earthquake' && (
+          <>
+            <div className="info-row">
+              <span className="telemetry-label">MAGNITUDE</span>
+              <span className="telemetry-value mag-badge">
+                M {target.magnitude?.toFixed(1)}
+              </span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">LOCATION</span>
+              <span className="telemetry-value highlight">{target.title}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">DEPTH</span>
+              <span className="telemetry-value">{target.depth} KM</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">TIMESTAMP</span>
+              <span className="telemetry-value">
+                {target.time ? new Date(target.time).toLocaleString() : 'RECENT'}
+              </span>
+            </div>
+            {target.url && (
+              <div className="info-row">
+                <span className="telemetry-label">DATA LINK</span>
+                <a className="telemetry-link" href={target.url} target="_blank" rel="noreferrer">
+                  USGS REPORT ↗
+                </a>
+              </div>
+            )}
+          </>
+        )}
 
         <div className="info-row">
-          <span className="telemetry-label">ORIGIN</span>
-          <span className="telemetry-value">{flight.originCountry || 'UNKNOWN'}</span>
-        </div>
-
-        <div className="info-row">
-          <span className="telemetry-label">ALTITUDE</span>
-          <span className="telemetry-value">
-            {flight.altitude != null ? `${Math.round(flight.altitude).toLocaleString()} M` : '—'}
-          </span>
-        </div>
-
-        <div className="info-row">
-          <span className="telemetry-label">VELOCITY</span>
-          <span className="telemetry-value">
-            {flight.velocity != null ? `${Math.round(flight.velocity * 3.6).toLocaleString()} KM/H` : '—'}
-          </span>
-        </div>
-
-        <div className="info-row">
-          <span className="telemetry-label">HEADING</span>
-          <span className="telemetry-value">
-            {flight.heading != null ? `${Math.round(flight.heading)}°` : '—'}
-          </span>
-        </div>
-
-        <div className="info-row">
-          <span className="telemetry-label">POSITION</span>
+          <span className="telemetry-label">COORDINATES</span>
           <span className="telemetry-value position">
-            {flight.latitude != null && flight.longitude != null
-              ? `${flight.latitude.toFixed(2)}°, ${flight.longitude.toFixed(2)}°`
+            {target.latitude != null && target.longitude != null
+              ? `${target.latitude.toFixed(2)}°, ${target.longitude.toFixed(2)}°`
               : '—'}
           </span>
         </div>
@@ -77,4 +155,5 @@ export default function InfoPanel({ flight }) {
     </div>
   )
 }
+
 
