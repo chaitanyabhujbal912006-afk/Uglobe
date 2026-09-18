@@ -4,16 +4,50 @@ import InfoPanel from './components/InfoPanel.jsx'
 import { useFlights } from './hooks/useFlights.js'
 import { useEarthquakes } from './hooks/useEarthquakes.js'
 import { useSatellites } from './hooks/useSatellites.js'
+import {
+  setAudioEnabled,
+  isAudioEnabled,
+  playClickSound,
+  playFilterSound,
+} from './utils/soundEngine.js'
 
 export default function App() {
   const { flights, status: flightStatus, lastUpdated } = useFlights()
   const { earthquakes } = useEarthquakes()
   const { satellites } = useSatellites()
 
-  const [selectedFlight, setSelectedFlight] = useState(null)
+  const [selectedTarget, setSelectedTarget] = useState(null)
   const [filterQuery, setFilterQuery] = useState('')
   const [activeLayer, setActiveLayer] = useState('all') // 'all' | 'flights' | 'satellites' | 'earthquakes'
+
+  // Enhancement 3 & 4 States
+  const [minAltitude, setMinAltitude] = useState(0)
+  const [maxAltitude, setMaxAltitude] = useState(15000)
+  const [minMagnitude, setMinMagnitude] = useState(0)
+  const [renderMode, setRenderMode] = useState('grid') // 'grid' | 'solar' | 'night'
+  const [cinematicMode, setCinematicMode] = useState(false)
+  const [audioOn, setAudioOn] = useState(true)
+
   const resetCameraRef = useRef(null)
+  const flyToTargetRef = useRef(null)
+
+  const handleAudioToggle = () => {
+    const next = !audioOn
+    setAudioOn(next)
+    setAudioEnabled(next)
+    if (next) playClickSound()
+  }
+
+  const handleSelectTarget = (target) => {
+    setSelectedTarget(target)
+  }
+
+  const handleFlyToTarget = (target) => {
+    playClickSound()
+    if (flyToTargetRef.current) {
+      flyToTargetRef.current(target)
+    }
+  }
 
   const statusLabel = {
     loading: 'Connecting…',
@@ -21,13 +55,15 @@ export default function App() {
     error: 'Reconnecting…',
   }[flightStatus]
 
-  const matchCount = filterQuery.trim()
-    ? flights.filter(
-        (f) =>
-          (f.callsign || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
-          (f.originCountry || '').toLowerCase().includes(filterQuery.toLowerCase())
-      ).length
-    : null
+  const filteredFlightCount = flights.filter(f => {
+    const alt = f.altitude ?? 8000
+    if (alt < minAltitude || alt > maxAltitude) return false
+    if (!filterQuery.trim()) return true
+    return (
+      (f.callsign || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
+      (f.originCountry || '').toLowerCase().includes(filterQuery.toLowerCase())
+    )
+  }).length
 
   return (
     <div className="app-shell">
@@ -37,39 +73,86 @@ export default function App() {
         satellites={satellites}
         activeLayer={activeLayer}
         filterQuery={filterQuery}
-        onSelectFlight={setSelectedFlight}
+        minAltitude={minAltitude}
+        maxAltitude={maxAltitude}
+        minMagnitude={minMagnitude}
+        renderMode={renderMode}
+        cinematicMode={cinematicMode}
+        selectedTarget={selectedTarget}
+        onSelectTarget={handleSelectTarget}
         onResetReady={(fn) => { resetCameraRef.current = fn }}
+        onFlyToTargetReady={(fn) => { flyToTargetRef.current = fn }}
       />
 
       <div className="hud">
-        <div className="hud-title">🌍 Live Globe</div>
-        <div className="hud-subtitle">Real-time 3D flight, satellite & earthquake visualizer</div>
+        <div className="hud-header-row">
+          <div>
+            <div className="hud-title">🌍 Live Globe</div>
+            <div className="hud-subtitle">Real-time 3D flight, satellite & earthquake visualizer</div>
+          </div>
+          <button
+            className={`audio-toggle-btn ${audioOn ? 'active' : ''}`}
+            onClick={handleAudioToggle}
+            title="Toggle Web Audio Synthesizer"
+          >
+            {audioOn ? '🔊 AUDIO ON' : '🔇 MUTE'}
+          </button>
+        </div>
 
         {/* Data Layer Toggles */}
         <div className="layer-selector">
           <button
             className={`layer-btn ${activeLayer === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveLayer('all')}
+            onClick={() => { playFilterSound(); setActiveLayer('all') }}
           >
             🌐 All
           </button>
           <button
             className={`layer-btn ${activeLayer === 'flights' ? 'active' : ''}`}
-            onClick={() => setActiveLayer('flights')}
+            onClick={() => { playFilterSound(); setActiveLayer('flights') }}
           >
             ✈️ Flights ({flights.length})
           </button>
           <button
             className={`layer-btn ${activeLayer === 'satellites' ? 'active' : ''}`}
-            onClick={() => setActiveLayer('satellites')}
+            onClick={() => { playFilterSound(); setActiveLayer('satellites') }}
           >
             🛰️ Satellites ({satellites.length})
           </button>
           <button
             className={`layer-btn ${activeLayer === 'earthquakes' ? 'active' : ''}`}
-            onClick={() => setActiveLayer('earthquakes')}
+            onClick={() => { playFilterSound(); setActiveLayer('earthquakes') }}
           >
-            🌋 Earthquakes ({earthquakes.length})
+            🌋 Quakes ({earthquakes.length})
+          </button>
+        </div>
+
+        {/* Shading & Camera Controls */}
+        <div className="mode-selector">
+          <button
+            className={`mode-btn ${renderMode === 'grid' ? 'active' : ''}`}
+            onClick={() => { playClickSound(); setRenderMode('grid') }}
+          >
+            🌐 Cyber Grid
+          </button>
+          <button
+            className={`mode-btn ${renderMode === 'solar' ? 'active' : ''}`}
+            onClick={() => { playClickSound(); setRenderMode('solar') }}
+          >
+            ☀️ Solar Day/Night
+          </button>
+          <button
+            className={`mode-btn ${renderMode === 'night' ? 'active' : ''}`}
+            onClick={() => { playClickSound(); setRenderMode('night') }}
+          >
+            🌙 High Contrast
+          </button>
+          <button
+            className={`mode-btn cinematic ${cinematicMode ? 'active' : ''}`}
+            onClick={() => { playClickSound(); setCinematicMode(!cinematicMode) }}
+            title="Auto-rotating Orbit Flyby"
+          >
+            🎬 Cinematic {cinematicMode ? 'ON' : 'OFF'}
           </button>
         </div>
 
@@ -78,7 +161,7 @@ export default function App() {
           <input
             className="search-input"
             type="text"
-            placeholder="Search callsign or country…"
+            placeholder="Search callsign, satellite or location…"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             spellCheck={false}
@@ -91,18 +174,46 @@ export default function App() {
             >✕</button>
           )}
         </div>
-        {matchCount !== null && (
-          <div className="search-count">
-            {matchCount.toLocaleString()} of {flights.length.toLocaleString()} matching
-          </div>
-        )}
+
+        {/* Multi-Parameter Filters */}
+        <div className="filter-group">
+          {(activeLayer === 'all' || activeLayer === 'flights') && (
+            <div className="slider-row">
+              <span className="slider-label">MAX ALTITUDE: {maxAltitude.toLocaleString()} M</span>
+              <input
+                type="range"
+                min="2000"
+                max="15000"
+                step="500"
+                value={maxAltitude}
+                onChange={(e) => { setMaxAltitude(Number(e.target.value)); playFilterSound() }}
+                className="altitude-slider"
+              />
+            </div>
+          )}
+
+          {(activeLayer === 'all' || activeLayer === 'earthquakes') && (
+            <div className="mag-filter-row">
+              <span className="mag-label">MIN MAGNITUDE:</span>
+              {[0, 3.5, 5.0, 6.0].map((mag) => (
+                <button
+                  key={mag}
+                  className={`mag-btn ${minMagnitude === mag ? 'active' : ''}`}
+                  onClick={() => { setMinMagnitude(mag); playFilterSound() }}
+                >
+                  {mag === 0 ? 'ALL' : `M${mag}+`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Reset View */}
         <button
           className="reset-btn"
-          onClick={() => resetCameraRef.current?.()}
+          onClick={() => { playClickSound(); resetCameraRef.current?.() }}
         >
-          ↺ Reset View
+          ↺ Reset Camera View
         </button>
       </div>
 
@@ -130,23 +241,28 @@ export default function App() {
         <span className="ticker-label">RADAR.NET // LIVE DATA ENGINE</span>
         <span className="ticker-divider">|</span>
         <span className="ticker-text">
-          ✈️ {flights.length.toLocaleString()} FLIGHTS · 🛰️ {satellites.length.toLocaleString()} SATELLITES · 🌋 {earthquakes.length.toLocaleString()} QUAKES · FEEDS: OPENSKY + CELESTRAK + USGS
+          ✈️ {filteredFlightCount.toLocaleString()} VISIBLE FLIGHTS · 🛰️ {satellites.length.toLocaleString()} SATELLITES · 🌋 {earthquakes.length.toLocaleString()} QUAKES · FEEDS: OPENSKY + CELESTRAK + USGS
         </span>
       </div>
 
       <div className="status-pill">
-        <span className={`status-dot ${status}`} />
+        <span className={`status-dot ${flightStatus}`} />
         {statusLabel}
-        {lastUpdated && status === 'live' && (
+        {lastUpdated && flightStatus === 'live' && (
           <span style={{ color: '#556077' }}>
             · {lastUpdated.toLocaleTimeString()}
           </span>
         )}
       </div>
 
-      <InfoPanel flight={selectedFlight} />
+      <InfoPanel
+        target={selectedTarget}
+        onClearTarget={() => setSelectedTarget(null)}
+        onFlyToTarget={handleFlyToTarget}
+      />
 
-      <div className="flight-count">{flights.length.toLocaleString()} aircraft tracked</div>
+      <div className="flight-count">{filteredFlightCount.toLocaleString()} targets rendering</div>
     </div>
   )
 }
+
