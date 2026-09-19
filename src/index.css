@@ -550,3 +550,168 @@ body {
   color: #000;
 }
 
+/* ---- Regional Focus Selector Bar ---- */
+.region-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.region-title {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.region-btn {
+  padding: 3px 8px;
+  border: 1px solid #1e293b;
+  background: #050b14;
+  color: #94a3b8;
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.region-btn:hover {
+  border-color: #00f3ff;
+  color: #00f3ff;
+  background: rgba(0, 243, 255, 0.1);
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.2);
+}
+
+/* ---- Tool Row & Ruler Button ---- */
+.tool-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.measure-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ffe600;
+  background: rgba(255, 230, 0, 0.05);
+  color: #ffe600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.measure-btn:hover {
+  background: #ffe600;
+  color: #000;
+  box-shadow: 0 0 12px rgba(255, 230, 0, 0.4);
+}
+
+.measure-btn.active {
+  background: #ffe600;
+  color: #000;
+  box-shadow: 0 0 16px rgba(255, 230, 0, 0.6);
+}
+
+/* ---- Spatial Distance Measurement Results Card ---- */
+.measurement-card {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+  min-width: 320px;
+  padding: 16px;
+  background: rgba(5, 5, 5, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #ffe600;
+  box-shadow: 0 0 20px rgba(255, 230, 0, 0.25);
+}
+
+.measurement-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 230, 0, 0.2);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.measurement-card .card-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffe600;
+  letter-spacing: 0.1em;
+}
+
+.measurement-card .card-close {
+  background: transparent;
+  border: 1px solid #ffe600;
+  color: #ffe600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.measurement-card .card-close:hover {
+  background: #ffe600;
+  color: #000;
+}
+
+.measure-status {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.measure-status .prompt {
+  color: #ffe600;
+  margin-top: 6px;
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.measure-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.measure-results .coords-row {
+  font-size: 10px;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+}
+
+.measure-results .dist-main {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 10px rgba(255, 230, 0, 0.4);
+}
+
+.measure-results .dist-main .unit {
+  font-size: 14px;
+  color: #ffe600;
+}
+
+.measure-results .dist-sub {
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.measure-results .dist-sub .sep {
+  color: #334155;
+}
+
+

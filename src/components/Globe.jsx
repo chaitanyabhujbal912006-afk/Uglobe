@@ -308,9 +308,13 @@ export default function Globe({
   renderMode = 'grid', // 'grid' | 'solar' | 'night'
   cinematicMode = false,
   selectedTarget = null,
+  measureMode = false,
+  measurePoints = [],
+  onAddMeasurePoint,
   onSelectTarget,
   onResetReady,
   onFlyToTargetReady,
+  onFlyToLocationReady,
 }) {
   const containerRef       = useRef(null)
   const flightsRef         = useRef(flights)
@@ -323,6 +327,10 @@ export default function Globe({
   const minMagnitudeRef    = useRef(minMagnitude)
   const renderModeRef      = useRef(renderMode)
   const cinematicModeRef   = useRef(cinematicMode)
+
+  const measureModeRef        = useRef(measureMode)
+  const measurePointsRef      = useRef(measurePoints)
+  const onAddMeasurePointRef  = useRef(onAddMeasurePoint)
 
   const visibleFlightsRef    = useRef([])
   const visibleSatellitesRef = useRef([])
@@ -339,6 +347,9 @@ export default function Globe({
   const cameraRef          = useRef(null)
   const controlsRef        = useRef(null)
   const earthMatRef        = useRef(null)
+  const earthMeshRef       = useRef(null)
+  const measureGroupRef    = useRef(null)
+  const trajectoryGroupRef = useRef(null)
 
   const flyToStateRef      = useRef(null)
 
@@ -357,12 +368,22 @@ export default function Globe({
   }, [flights, earthquakes, satellites, activeLayer, filterQuery, minAltitude, maxAltitude, minMagnitude, renderMode, cinematicMode])
 
   useEffect(() => {
+    measureModeRef.current       = measureMode
+    measurePointsRef.current     = measurePoints
+    onAddMeasurePointRef.current = onAddMeasurePoint
+    updateMeasureVisuals()
+  }, [measureMode, measurePoints, onAddMeasurePoint])
+
+  useEffect(() => {
     if (selectedTarget) {
       positionSelectionRingForTarget(selectedTarget)
-    } else if (selectionRingRef.current) {
-      selectionRingRef.current.visible = false
+      updateSelectedTargetTrajectory(selectedTarget)
+    } else {
+      if (selectionRingRef.current) selectionRingRef.current.visible = false
+      updateSelectedTargetTrajectory(null)
     }
   }, [selectedTarget])
+
 
   // -------------------------------------------------------------------------
   // updateMarkers — updates 3D meshes & populates visible target index arrays
@@ -588,6 +609,162 @@ export default function Globe({
   }
 
   // -------------------------------------------------------------------------
+  // flyToLocation — smooth camera fly-to tween to geographical coordinates
+  // -------------------------------------------------------------------------
+  function flyToLocation(lat, lon, dist = 4.2) {
+    const camera = cameraRef.current
+    const controls = controlsRef.current
+    if (!camera || !controls) return
+
+    const targetLocal = latLongToVector3(lat, lon, GLOBE_RADIUS)
+    const targetWorld = targetLocal.clone()
+    if (globeGroupRef.current) {
+      targetWorld.applyMatrix4(globeGroupRef.current.matrixWorld)
+    }
+
+    const camPos = targetWorld.clone().normalize().multiplyScalar(dist)
+
+    flyToStateRef.current = {
+      fromPos: camera.position.clone(),
+      toPos: camPos,
+      fromTarget: controls.target.clone(),
+      toTarget: _origin.clone(),
+      startTime: performance.now() / 1000,
+      duration: 1.25,
+    }
+    controls.enabled = false
+  }
+
+  // -------------------------------------------------------------------------
+  // updateMeasureVisuals — renders 3D distance measurement arc & marker pins
+  // -------------------------------------------------------------------------
+  function updateMeasureVisuals() {
+    const group = measureGroupRef.current
+    if (!group) return
+
+    while (group.children.length > 0) {
+      const child = group.children[0]
+      group.remove(child)
+      if (child.geometry) child.geometry.dispose()
+      if (child.material) child.material.dispose()
+    }
+
+    const points = measurePointsRef.current || []
+    if (points.length === 0) return
+
+    points.forEach((pt, idx) => {
+      const raw = latLongToVector3(pt.lat, pt.lon, GLOBE_RADIUS * 1.015)
+      const markerGeo = new THREE.CylinderGeometry(0.008, 0.024, 0.12, 16)
+      markerGeo.translate(0, 0.06, 0)
+      const colorHex = idx === 0 ? 0x00f3ff : 0xffa500
+      const markerMat = new THREE.MeshBasicMaterial({ color: colorHex, toneMapped: false })
+      const markerMesh = new THREE.Mesh(markerGeo, markerMat)
+
+      _pos.set(raw.x, raw.y, raw.z)
+      _hPos.set(raw.x, raw.y, raw.z).normalize()
+      _quat.setFromUnitVectors(_Y, _hPos)
+      markerMesh.position.copy(_pos)
+      markerMesh.quaternion.copy(_quat)
+      group.add(markerMesh)
+
+      const ringGeo = new THREE.RingGeometry(0.02, 0.035, 32)
+      const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.8, toneMapped: false })
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat)
+      ringMesh.position.copy(_pos)
+      ringMesh.quaternion.copy(_quat)
+      group.add(ringMesh)
+    })
+
+    if (points.length >= 2) {
+      const p1 = latLongToVector3(points[0].lat, points[0].lon, GLOBE_RADIUS * 1.015)
+      const p2 = latLongToVector3(points[1].lat, points[1].lon, GLOBE_RADIUS * 1.015)
+
+      const u1 = p1.clone().normalize()
+      const u2 = p2.clone().normalize()
+      const dot = Math.max(-1, Math.min(1, u1.dot(u2)))
+      const angleRad = Math.acos(dot)
+      const midNorm = new THREE.Vector3().addVectors(u1, u2).normalize()
+      const peakAltitude = GLOBE_RADIUS + Math.min(angleRad * 0.75, 1.4)
+      const control = midNorm.multiplyScalar(peakAltitude)
+
+      const curve = new THREE.QuadraticBezierCurve3(p1, control, p2)
+      const curvePoints = curve.getPoints(64)
+      const arcGeo = new THREE.BufferGeometry().setFromPoints(curvePoints)
+      const arcMat = new THREE.LineBasicMaterial({
+        color: 0xffa500,
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      })
+      const arcMesh = new THREE.Line(arcGeo, arcMat)
+      group.add(arcMesh)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // updateSelectedTargetTrajectory — renders forward projected vector path
+  // -------------------------------------------------------------------------
+  function updateSelectedTargetTrajectory(target) {
+    const group = trajectoryGroupRef.current
+    if (!group) return
+
+    while (group.children.length > 0) {
+      const child = group.children[0]
+      group.remove(child)
+      if (child.geometry) child.geometry.dispose()
+      if (child.material) child.material.dispose()
+    }
+
+    if (!target || target.latitude == null || target.longitude == null) return
+
+    const heading = target.heading ?? 0
+    const lat = target.latitude
+    const lon = target.longitude
+    let r = GLOBE_RADIUS * 1.013
+    if (target.type === 'satellite') r = GLOBE_RADIUS * (1.16 + ((target.altitudeKm || 500) / 3500))
+
+    const pts = []
+    const steps = 32
+    const maxArcDeg = target.type === 'satellite' ? 40 : 10
+    const radHeading = (heading * Math.PI) / 180
+
+    for (let i = 0; i <= steps; i++) {
+      const frac = i / steps
+      const distDeg = frac * maxArcDeg
+      const lat1 = (lat * Math.PI) / 180
+      const lon1 = (lon * Math.PI) / 180
+      const dRad = (distDeg * Math.PI) / 180
+
+      const lat2 = Math.asin(
+        Math.sin(lat1) * Math.cos(dRad) +
+        Math.cos(lat1) * Math.sin(dRad) * Math.cos(radHeading)
+      )
+      const lon2 = lon1 + Math.atan2(
+        Math.sin(radHeading) * Math.sin(dRad) * Math.cos(lat1),
+        Math.cos(dRad) - Math.sin(lat1) * Math.sin(lat2)
+      )
+
+      const p = latLongToVector3((lat2 * 180) / Math.PI, (lon2 * 180) / Math.PI, r + frac * 0.05)
+      pts.push(p)
+    }
+
+    const trajGeo = new THREE.BufferGeometry().setFromPoints(pts)
+    const trajMat = new THREE.LineDashedMaterial({
+      color: 0x00f3ff,
+      dashSize: 0.03,
+      gapSize: 0.02,
+      transparent: true,
+      opacity: 0.9,
+      toneMapped: false,
+    })
+    const trajLine = new THREE.Line(trajGeo, trajMat)
+    trajLine.computeLineDistances()
+    group.add(trajLine)
+  }
+
+
+  // -------------------------------------------------------------------------
   // Scene setup — runs once on mount
   // -------------------------------------------------------------------------
   useEffect(() => {
@@ -688,6 +865,16 @@ export default function Globe({
     const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial)
     globeGroup.add(earthMesh)
     earthMatRef.current = earthMaterial
+    earthMeshRef.current = earthMesh
+
+    const measureGroup = new THREE.Group()
+    globeGroup.add(measureGroup)
+    measureGroupRef.current = measureGroup
+
+    const trajectoryGroup = new THREE.Group()
+    globeGroup.add(trajectoryGroup)
+    trajectoryGroupRef.current = trajectoryGroup
+
 
     // Atmospheric Glow Shell
     const atmoGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.03, 64, 64)
@@ -937,6 +1124,45 @@ export default function Globe({
       mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1
       raycaster.setFromCamera(mouse, camera)
 
+      if (measureModeRef.current) {
+        const checkObjects = []
+        if (earthMeshRef.current) checkObjects.push(earthMeshRef.current)
+        if (instancedMesh.count > 0) checkObjects.push(instancedMesh)
+        if (satellitesMesh.count > 0) checkObjects.push(satellitesMesh)
+        if (earthquakesMesh.count > 0) checkObjects.push(earthquakesMesh)
+
+        const hits = raycaster.intersectObjects(checkObjects, false)
+        if (hits.length > 0) {
+          const hit = hits[0]
+          let lat = null
+          let lon = null
+
+          if (hit.object === instancedMesh) {
+            const f = visibleFlightsRef.current[hit.instanceId]
+            if (f) { lat = f.latitude; lon = f.longitude }
+          } else if (hit.object === satellitesMesh) {
+            const s = visibleSatellitesRef.current[hit.instanceId]
+            if (s) { lat = s.latitude; lon = s.longitude }
+          } else if (hit.object === earthquakesMesh) {
+            const eq = visibleEarthquakesRef.current[hit.instanceId]
+            if (eq) { lat = eq.latitude; lon = eq.longitude }
+          } else {
+            const localPt = hit.point.clone()
+            if (globeGroupRef.current) {
+              const invMat = globeGroupRef.current.matrixWorld.clone().invert()
+              localPt.applyMatrix4(invMat)
+            }
+            lat = Math.asin(Math.max(-1, Math.min(1, localPt.y / GLOBE_RADIUS))) * (180 / Math.PI)
+            lon = -Math.atan2(localPt.z, localPt.x) * (180 / Math.PI)
+          }
+
+          if (lat != null && lon != null && onAddMeasurePointRef.current) {
+            onAddMeasurePointRef.current({ lat, lon })
+          }
+        }
+        return
+      }
+
       const checkObjects = []
       if (instancedMesh.count > 0) checkObjects.push(instancedMesh)
       if (satellitesMesh.count > 0) checkObjects.push(satellitesMesh)
@@ -995,6 +1221,8 @@ export default function Globe({
     }
     if (onResetReady) onResetReady(triggerReset)
     if (onFlyToTargetReady) onFlyToTargetReady(flyToTarget)
+    if (onFlyToLocationReady) onFlyToLocationReady(flyToLocation)
+
 
     // Animation loop
     let animationFrameId

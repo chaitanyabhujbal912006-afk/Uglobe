@@ -4,11 +4,13 @@ import InfoPanel from './components/InfoPanel.jsx'
 import { useFlights } from './hooks/useFlights.js'
 import { useEarthquakes } from './hooks/useEarthquakes.js'
 import { useSatellites } from './hooks/useSatellites.js'
+import { calculateGreatCircleDistance } from './utils/coords.js'
 import {
   setAudioEnabled,
   isAudioEnabled,
   playClickSound,
   playFilterSound,
+  playMeasureSound,
 } from './utils/soundEngine.js'
 
 export default function App() {
@@ -20,7 +22,7 @@ export default function App() {
   const [filterQuery, setFilterQuery] = useState('')
   const [activeLayer, setActiveLayer] = useState('all') // 'all' | 'flights' | 'satellites' | 'earthquakes'
 
-  // Enhancement 3 & 4 States
+  // Control States
   const [minAltitude, setMinAltitude] = useState(0)
   const [maxAltitude, setMaxAltitude] = useState(15000)
   const [minMagnitude, setMinMagnitude] = useState(0)
@@ -28,8 +30,13 @@ export default function App() {
   const [cinematicMode, setCinematicMode] = useState(false)
   const [audioOn, setAudioOn] = useState(true)
 
+  // Distance Measurement Tool State
+  const [measureMode, setMeasureMode] = useState(false)
+  const [measurePoints, setMeasurePoints] = useState([])
+
   const resetCameraRef = useRef(null)
   const flyToTargetRef = useRef(null)
+  const flyToLocationRef = useRef(null)
 
   const handleAudioToggle = () => {
     const next = !audioOn
@@ -49,6 +56,35 @@ export default function App() {
     }
   }
 
+  const handleToggleMeasureMode = () => {
+    playClickSound()
+    setMeasureMode(!measureMode)
+    if (measureMode) {
+      setMeasurePoints([])
+    }
+  }
+
+  const handleAddMeasurePoint = (point) => {
+    playMeasureSound()
+    if (measurePoints.length >= 2) {
+      setMeasurePoints([point])
+    } else {
+      setMeasurePoints([...measurePoints, point])
+    }
+  }
+
+  const handleClearMeasure = () => {
+    playClickSound()
+    setMeasurePoints([])
+  }
+
+  const handleRegionJump = (lat, lon) => {
+    playClickSound()
+    if (flyToLocationRef.current) {
+      flyToLocationRef.current(lat, lon, 4.2)
+    }
+  }
+
   const statusLabel = {
     loading: 'Connecting…',
     live: 'Live',
@@ -65,6 +101,13 @@ export default function App() {
     )
   }).length
 
+  const measuredDistance = measurePoints.length === 2
+    ? calculateGreatCircleDistance(
+        measurePoints[0].lat, measurePoints[0].lon,
+        measurePoints[1].lat, measurePoints[1].lon
+      )
+    : null
+
   return (
     <div className="app-shell">
       <Globe
@@ -79,9 +122,13 @@ export default function App() {
         renderMode={renderMode}
         cinematicMode={cinematicMode}
         selectedTarget={selectedTarget}
+        measureMode={measureMode}
+        measurePoints={measurePoints}
+        onAddMeasurePoint={handleAddMeasurePoint}
         onSelectTarget={handleSelectTarget}
         onResetReady={(fn) => { resetCameraRef.current = fn }}
         onFlyToTargetReady={(fn) => { flyToTargetRef.current = fn }}
+        onFlyToLocationReady={(fn) => { flyToLocationRef.current = fn }}
       />
 
       <div className="hud">
@@ -156,6 +203,16 @@ export default function App() {
           </button>
         </div>
 
+        {/* Regional Quick Focus Bar */}
+        <div className="region-selector">
+          <span className="region-title">QUICK FOCUS:</span>
+          <button className="region-btn" onClick={() => handleRegionJump(38, -97)}>🗽 NA</button>
+          <button className="region-btn" onClick={() => handleRegionJump(48, 15)}>🇪🇺 EU</button>
+          <button className="region-btn" onClick={() => handleRegionJump(25, 115)}>🌏 APAC</button>
+          <button className="region-btn" onClick={() => handleRegionJump(15, 30)}>🌍 MEA</button>
+          <button className="region-btn" onClick={() => handleRegionJump(-25, 135)}>🇦🇺 OCE</button>
+        </div>
+
         {/* Search */}
         <div className="search-row">
           <input
@@ -208,14 +265,56 @@ export default function App() {
           )}
         </div>
 
-        {/* Reset View */}
-        <button
-          className="reset-btn"
-          onClick={() => { playClickSound(); resetCameraRef.current?.() }}
-        >
-          ↺ Reset Camera View
-        </button>
+        {/* Measurement Ruler Mode & Reset View */}
+        <div className="tool-row">
+          <button
+            className={`measure-btn ${measureMode ? 'active' : ''}`}
+            onClick={handleToggleMeasureMode}
+          >
+            📏 RULER MODE: {measureMode ? 'ON' : 'OFF'}
+          </button>
+          <button
+            className="reset-btn"
+            onClick={() => { playClickSound(); resetCameraRef.current?.() }}
+          >
+            ↺ Reset View
+          </button>
+        </div>
       </div>
+
+      {/* Spatial Distance Measurement Results HUD Card */}
+      {measureMode && (
+        <div className="measurement-card">
+          <div className="card-header">
+            <span className="card-title">📏 SPATIAL DISTANCE RULER</span>
+            <button className="card-close" onClick={handleClearMeasure}>✕ RESET</button>
+          </div>
+          {measurePoints.length === 0 && (
+            <div className="measure-status">Click any point or target on globe to set ORIGIN (Pt A)...</div>
+          )}
+          {measurePoints.length === 1 && (
+            <div className="measure-status">
+              <div>📍 PT A: {measurePoints[0].lat.toFixed(2)}°, {measurePoints[0].lon.toFixed(2)}°</div>
+              <div className="prompt">Click second point on globe to set DESTINATION (Pt B)...</div>
+            </div>
+          )}
+          {measuredDistance && (
+            <div className="measure-results">
+              <div className="coords-row">
+                <span>A: {measurePoints[0].lat.toFixed(2)}°, {measurePoints[0].lon.toFixed(2)}°</span>
+                <span>→</span>
+                <span>B: {measurePoints[1].lat.toFixed(2)}°, {measurePoints[1].lon.toFixed(2)}°</span>
+              </div>
+              <div className="dist-main">{measuredDistance.km.toLocaleString()} <span className="unit">KM</span></div>
+              <div className="dist-sub">
+                <span>{measuredDistance.nauticalMiles.toLocaleString()} NM</span>
+                <span className="sep">|</span>
+                <span>{measuredDistance.miles.toLocaleString()} MILES</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Altitude Spectrum Bar */}
       <div className="altitude-legend">
@@ -265,4 +364,5 @@ export default function App() {
     </div>
   )
 }
+
 
