@@ -307,6 +307,7 @@ export default function Globe({
   minMagnitude = 0,
   renderMode = 'grid', // 'grid' | 'solar' | 'night'
   cinematicMode = false,
+  atmosphereTheme = 'cyan', // 'cyan' | 'amber' | 'matrix' | 'violet'
   selectedTarget = null,
   measureMode = false,
   measurePoints = [],
@@ -315,8 +316,10 @@ export default function Globe({
   onResetReady,
   onFlyToTargetReady,
   onFlyToLocationReady,
+  onFlyToPresetReady,
 }) {
   const containerRef       = useRef(null)
+  const atmoMatRef         = useRef(null)
   const flightsRef         = useRef(flights)
   const earthquakesRef     = useRef(earthquakes)
   const satellitesRef      = useRef(satellites)
@@ -383,6 +386,18 @@ export default function Globe({
       updateSelectedTargetTrajectory(null)
     }
   }, [selectedTarget])
+
+  useEffect(() => {
+    if (!atmoMatRef.current) return
+    const colors = {
+      cyan: new THREE.Color(0.0, 0.75, 1.0),
+      amber: new THREE.Color(1.0, 0.55, 0.0),
+      matrix: new THREE.Color(0.0, 1.0, 0.45),
+      violet: new THREE.Color(0.7, 0.2, 1.0),
+    }
+    const c = colors[atmosphereTheme] || colors.cyan
+    atmoMatRef.current.uniforms.uAtmoColor.value.copy(c)
+  }, [atmosphereTheme])
 
 
   // -------------------------------------------------------------------------
@@ -883,6 +898,9 @@ export default function Globe({
       depthWrite: false,
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
+      uniforms: {
+        uAtmoColor: { value: new THREE.Color(0.0, 0.75, 1.0) },
+      },
       vertexShader: `
         varying vec3 vNormal;
         void main() {
@@ -891,14 +909,16 @@ export default function Globe({
         }
       `,
       fragmentShader: `
+        uniform vec3 uAtmoColor;
         varying vec3 vNormal;
         void main() {
           float intensity = pow(0.62 - dot(vNormal, vec3(0, 0, 1.0)), 2.8);
-          gl_FragColor = vec4(0.0, 0.75, 1.0, 1.0) * intensity * 0.55;
+          gl_FragColor = vec4(uAtmoColor, 1.0) * intensity * 0.55;
         }
       `,
     })
     globeGroup.add(new THREE.Mesh(atmoGeometry, atmoMaterial))
+    atmoMatRef.current = atmoMaterial
 
     // GeoJSON Continental Outlines
     fetch('/continents.geojson')
@@ -1222,6 +1242,25 @@ export default function Globe({
     if (onResetReady) onResetReady(triggerReset)
     if (onFlyToTargetReady) onFlyToTargetReady(flyToTarget)
     if (onFlyToLocationReady) onFlyToLocationReady(flyToLocation)
+
+    function flyToPreset(preset) {
+      let targetCam = new THREE.Vector3(0, 0, 6)
+      if (preset === 'orbit') targetCam = new THREE.Vector3(3.2, 2.2, 4.4)
+      else if (preset === 'northPole') targetCam = new THREE.Vector3(0.001, 5.8, 0.001)
+      else if (preset === 'southPole') targetCam = new THREE.Vector3(0.001, -5.8, 0.001)
+      else if (preset === 'equator') targetCam = new THREE.Vector3(5.6, 0.2, 0.001)
+
+      flyToStateRef.current = {
+        fromPos: camera.position.clone(),
+        toPos: targetCam,
+        fromTarget: controls.target.clone(),
+        toTarget: _origin.clone(),
+        startTime: performance.now() / 1000,
+        duration: 1.25,
+      }
+      controls.enabled = false
+    }
+    if (onFlyToPresetReady) onFlyToPresetReady(flyToPreset)
 
 
     // Animation loop

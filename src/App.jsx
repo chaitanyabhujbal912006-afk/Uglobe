@@ -29,6 +29,7 @@ export default function App() {
   const [minMagnitude, setMinMagnitude] = useState(0)
   const [renderMode, setRenderMode] = useState('grid') // 'grid' | 'solar' | 'night'
   const [cinematicMode, setCinematicMode] = useState(false)
+  const [atmosphereTheme, setAtmosphereTheme] = useState('cyan') // 'cyan' | 'amber' | 'matrix' | 'violet'
   const [audioOn, setAudioOn] = useState(true)
   const [isHudCollapsed, setIsHudCollapsed] = useState(false)
   const [isFeedOpen, setIsFeedOpen] = useState(false)
@@ -48,6 +49,7 @@ export default function App() {
   const resetCameraRef = useRef(null)
   const flyToTargetRef = useRef(null)
   const flyToLocationRef = useRef(null)
+  const flyToPresetRef = useRef(null)
 
   const handleAudioToggle = () => {
     const next = !audioOn
@@ -137,9 +139,11 @@ export default function App() {
         measurePoints={measurePoints}
         onAddMeasurePoint={handleAddMeasurePoint}
         onSelectTarget={handleSelectTarget}
+        atmosphereTheme={atmosphereTheme}
         onResetReady={(fn) => { resetCameraRef.current = fn }}
         onFlyToTargetReady={(fn) => { flyToTargetRef.current = fn }}
         onFlyToLocationReady={(fn) => { flyToLocationRef.current = fn }}
+        onFlyToPresetReady={(fn) => { flyToPresetRef.current = fn }}
       />
 
       {isHudCollapsed ? (
@@ -266,6 +270,36 @@ export default function App() {
           <button className="region-btn" onClick={() => handleRegionJump(25, 115)}>🌏 APAC</button>
           <button className="region-btn" onClick={() => handleRegionJump(15, 30)}>🌍 MEA</button>
           <button className="region-btn" onClick={() => handleRegionJump(-25, 135)}>🇦🇺 OCE</button>
+        </div>
+
+        {/* Camera Perspective Angle Presets */}
+        <div className="preset-selector">
+          <span className="preset-title">VIEW ANGLE:</span>
+          <button className="preset-btn" onClick={() => { playClickSound(); flyToPresetRef.current?.('orbit') }} title="Standard 3D Orbit">🌐 3D</button>
+          <button className="preset-btn" onClick={() => { playClickSound(); flyToPresetRef.current?.('northPole') }} title="Top-down North Polar">❄️ NORTH</button>
+          <button className="preset-btn" onClick={() => { playClickSound(); flyToPresetRef.current?.('southPole') }} title="Bottom-up South Polar">🐧 SOUTH</button>
+          <button className="preset-btn" onClick={() => { playClickSound(); flyToPresetRef.current?.('equator') }} title="Equator Horizon Glance">🌅 EQUATOR</button>
+        </div>
+
+        {/* Atmosphere Corona Palette Switcher */}
+        <div className="theme-selector">
+          <span className="theme-title">ATMO GLOW:</span>
+          {[
+            { id: 'cyan', label: 'CYAN', color: '#00f3ff' },
+            { id: 'amber', label: 'AMBER', color: '#ffaa00' },
+            { id: 'matrix', label: 'MATRIX', color: '#00ff88' },
+            { id: 'violet', label: 'VIOLET', color: '#c084fc' },
+          ].map(t => (
+            <button
+              key={t.id}
+              className={`theme-btn ${atmosphereTheme === t.id ? 'active' : ''}`}
+              onClick={() => { playClickSound(); setAtmosphereTheme(t.id) }}
+              title={`Switch Atmosphere Glow to ${t.label}`}
+            >
+              <span className="theme-dot" style={{ backgroundColor: t.color }} />
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Search */}

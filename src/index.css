@@ -405,6 +405,90 @@ html, body, #root {
   box-shadow: 0 0 8px rgba(0, 243, 255, 0.25);
 }
 
+/* ---- Camera Perspective Presets ---- */
+.preset-selector {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-title {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.preset-btn {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 18, 30, 0.5);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.preset-btn:hover {
+  border-color: var(--cyan-neon);
+  color: var(--cyan-neon);
+  background: rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.25);
+}
+
+/* ---- Atmosphere Corona Glow Palette ---- */
+.theme-selector {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.theme-title {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.theme-btn {
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 18, 30, 0.5);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.theme-btn:hover {
+  border-color: var(--border-cyan);
+  color: #ffffff;
+}
+.theme-btn.active {
+  border-color: var(--theme-col, var(--cyan-neon));
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+.theme-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 /* ---- Search Row ---- */
 .search-row {
   display: flex;
