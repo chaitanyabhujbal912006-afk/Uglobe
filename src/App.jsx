@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Globe from './components/Globe.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
+import TargetFeedDrawer from './components/TargetFeedDrawer.jsx'
 import { useFlights } from './hooks/useFlights.js'
 import { useEarthquakes } from './hooks/useEarthquakes.js'
 import { useSatellites } from './hooks/useSatellites.js'
@@ -30,6 +31,7 @@ export default function App() {
   const [cinematicMode, setCinematicMode] = useState(false)
   const [audioOn, setAudioOn] = useState(true)
   const [isHudCollapsed, setIsHudCollapsed] = useState(false)
+  const [isFeedOpen, setIsFeedOpen] = useState(false)
   const [utcTime, setUtcTime] = useState(() => new Date().toISOString().substring(11, 19) + ' UTC')
 
   useEffect(() => {
@@ -398,15 +400,36 @@ export default function App() {
         </span>
       </div>
 
-      <div className="status-pill">
-        <span className={`status-dot ${flightStatus}`} />
-        {statusLabel}
-        {lastUpdated && flightStatus === 'live' && (
-          <span style={{ color: '#556077' }}>
-            · {lastUpdated.toLocaleTimeString()}
-          </span>
-        )}
+      <div className="top-right-bar">
+        <button
+          className={`feed-launcher-btn ${isFeedOpen ? 'active' : ''}`}
+          onClick={() => { playClickSound(); setIsFeedOpen(!isFeedOpen) }}
+          title="Open Live Targets Radar Feed"
+        >
+          📡 RADAR FEED {isFeedOpen ? '✕' : '▼'}
+        </button>
+
+        <div className="status-pill">
+          <span className={`status-dot ${flightStatus}`} />
+          {statusLabel}
+          {lastUpdated && flightStatus === 'live' && (
+            <span style={{ color: '#556077' }}>
+              · {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
       </div>
+
+      <TargetFeedDrawer
+        isOpen={isFeedOpen}
+        onClose={() => setIsFeedOpen(false)}
+        flights={flights}
+        satellites={satellites}
+        earthquakes={earthquakes}
+        selectedTarget={selectedTarget}
+        onSelectTarget={handleSelectTarget}
+        onFlyToTarget={handleFlyToTarget}
+      />
 
       <InfoPanel
         target={selectedTarget}
