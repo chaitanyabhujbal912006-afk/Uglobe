@@ -770,11 +770,42 @@ html, body, #root {
   color: var(--cyan-neon);
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radar-ping {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 8px var(--cyan-neon);
+  display: inline-block;
+  animation: pulseBeacon 1.5s infinite;
 }
 
 .telemetry-header-actions {
   display: flex;
   gap: 6px;
+  align-items: center;
+}
+
+.unit-toggle-btn {
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  background: rgba(0, 243, 255, 0.1);
+  border: 1px solid var(--border-cyan);
+  color: var(--cyan-neon);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.unit-toggle-btn:hover {
+  background: var(--cyan-neon);
+  color: #030712;
 }
 
 .telemetry-act-btn {
@@ -803,6 +834,21 @@ html, body, #root {
   color: var(--crimson-neon);
 }
 
+/* Visual Altitude Progress Bar */
+.telemetry-alt-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin: -4px 0 8px 0;
+  overflow: hidden;
+}
+.telemetry-alt-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6600, #00e676, #00e5ff, #2962ff);
+  transition: width 0.3s ease;
+}
+
 .info-row {
   display: flex;
   justify-content: space-between;
@@ -819,11 +865,17 @@ html, body, #root {
 }
 
 .telemetry-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--yellow-neon);
   letter-spacing: 0.05em;
   text-shadow: 0 0 8px rgba(255, 230, 0, 0.3);
+}
+
+.telemetry-value.regime {
+  font-size: 11px;
+  color: var(--cyan-neon);
+  font-weight: 800;
 }
 
 .telemetry-value.position {
@@ -836,11 +888,81 @@ html, body, #root {
   text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
 }
 
+.mag-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .mag-badge {
   color: var(--yellow-neon);
   text-shadow: 0 0 10px rgba(255, 230, 0, 0.5);
   font-size: 18px;
   font-weight: 800;
+}
+
+.quake-tag {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.quake-tag.crimson {
+  background: rgba(255, 0, 85, 0.2);
+  color: var(--crimson-neon);
+  border: 1px solid var(--crimson-neon);
+}
+.quake-tag.amber {
+  background: rgba(255, 170, 0, 0.2);
+  color: var(--amber-neon);
+  border: 1px solid var(--amber-neon);
+}
+.quake-tag.yellow {
+  background: rgba(255, 230, 0, 0.15);
+  color: var(--yellow-neon);
+  border: 1px solid var(--yellow-neon);
+}
+.quake-tag.cyan {
+  background: rgba(0, 243, 255, 0.15);
+  color: var(--cyan-neon);
+  border: 1px solid var(--cyan-neon);
+}
+
+.depth-tag {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.coords-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.coords-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-coords-btn {
+  padding: 2px 6px;
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px solid var(--border-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--cyan-neon);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.copy-coords-btn:hover {
+  background: var(--cyan-neon);
+  color: #030712;
 }
 
 .telemetry-link {
