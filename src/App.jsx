@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Globe from './components/Globe.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
 import TargetFeedDrawer from './components/TargetFeedDrawer.jsx'
+import IntelModal from './components/IntelModal.jsx'
 import { useFlights } from './hooks/useFlights.js'
 import { useEarthquakes } from './hooks/useEarthquakes.js'
 import { useSatellites } from './hooks/useSatellites.js'
@@ -12,6 +13,7 @@ import {
   playClickSound,
   playFilterSound,
   playMeasureSound,
+  playIntelChime,
 } from './utils/soundEngine.js'
 
 export default function App() {
@@ -33,7 +35,14 @@ export default function App() {
   const [audioOn, setAudioOn] = useState(true)
   const [isHudCollapsed, setIsHudCollapsed] = useState(false)
   const [isFeedOpen, setIsFeedOpen] = useState(false)
+  const [isIntelOpen, setIsIntelOpen] = useState(false)
   const [utcTime, setUtcTime] = useState(() => new Date().toISOString().substring(11, 19) + ' UTC')
+
+  const searchInputRef = useRef(null)
+  const resetCameraRef = useRef(null)
+  const flyToTargetRef = useRef(null)
+  const flyToLocationRef = useRef(null)
+  const flyToPresetRef = useRef(null)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -42,14 +51,57 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // Distance Measurement Tool State
-  const [measureMode, setMeasureMode] = useState(false)
-  const [measurePoints, setMeasurePoints] = useState([])
+  // Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName?.toLowerCase()
+      const isInput = activeTag === 'input' || activeTag === 'textarea'
 
-  const resetCameraRef = useRef(null)
-  const flyToTargetRef = useRef(null)
-  const flyToLocationRef = useRef(null)
-  const flyToPresetRef = useRef(null)
+      if (e.key === 'Escape') {
+        if (isIntelOpen) { setIsIntelOpen(false); return }
+        if (isFeedOpen) { setIsFeedOpen(false); return }
+        if (selectedTarget) { setSelectedTarget(null); return }
+        if (measureMode) { setMeasureMode(false); setMeasurePoints([]); return }
+        if (isInput) { document.activeElement?.blur(); return }
+      }
+
+      if (isInput) return
+
+      if (e.code === 'Space') {
+        e.preventDefault()
+        playClickSound()
+        setCinematicMode(prev => !prev)
+      } else if (e.key === 'r' || e.key === 'R') {
+        playClickSound()
+        resetCameraRef.current?.()
+      } else if (e.key === 'm' || e.key === 'M') {
+        playClickSound()
+        setMeasureMode(prev => !prev)
+        setMeasurePoints([])
+      } else if (e.key === '/' || e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      } else if (e.key === '1') {
+        playFilterSound()
+        setActiveLayer('all')
+      } else if (e.key === '2') {
+        playFilterSound()
+        setActiveLayer('flights')
+      } else if (e.key === '3') {
+        playFilterSound()
+        setActiveLayer('satellites')
+      } else if (e.key === '4') {
+        playFilterSound()
+        setActiveLayer('earthquakes')
+      } else if (e.key === 'h' || e.key === 'H' || e.key === '?') {
+        playIntelChime()
+        setIsIntelOpen(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isIntelOpen, isFeedOpen, selectedTarget, measureMode])
 
   const handleAudioToggle = () => {
     const next = !audioOn
@@ -305,9 +357,10 @@ export default function App() {
         {/* Search */}
         <div className="search-row">
           <input
+            ref={searchInputRef}
             className="search-input"
             type="text"
-            placeholder="Search callsign, satellite or location…"
+            placeholder="Search callsign, satellite or location… (Shortcut: /)"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             spellCheck={false}
@@ -443,6 +496,14 @@ export default function App() {
           📡 RADAR FEED {isFeedOpen ? '✕' : '▼'}
         </button>
 
+        <button
+          className="intel-launcher-btn"
+          onClick={() => { playIntelChime(); setIsIntelOpen(true) }}
+          title="Mission Intel & Tactical Controls (Shortcut: H)"
+        >
+          ℹ️ INTEL
+        </button>
+
         <div className="status-pill">
           <span className={`status-dot ${flightStatus}`} />
           {statusLabel}
@@ -453,6 +514,11 @@ export default function App() {
           )}
         </div>
       </div>
+
+      <IntelModal
+        isOpen={isIntelOpen}
+        onClose={() => setIsIntelOpen(false)}
+      />
 
       <TargetFeedDrawer
         isOpen={isFeedOpen}
