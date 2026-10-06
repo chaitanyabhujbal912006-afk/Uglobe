@@ -132,6 +132,130 @@ html, body, #root {
   letter-spacing: 0.02em;
 }
 
+.hud-minimized-pill {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  padding: 8px 16px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-cyan);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 15px var(--border-cyan-glow);
+  transition: all 0.2s ease;
+}
+
+.hud-minimized-pill:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--cyan-neon);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 243, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.hud-minimized-pill .pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 8px var(--cyan-neon);
+}
+
+.hud-minimized-pill .pill-clock {
+  color: var(--cyan-neon);
+  font-size: 10px;
+}
+
+.hud-minimized-pill .pill-chevron {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.hud-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-collapse-btn {
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.hud-collapse-btn:hover {
+  border-color: var(--cyan-neon);
+  color: var(--cyan-neon);
+}
+
+.hud-utc-badge {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--cyan-neon);
+  background: rgba(0, 243, 255, 0.12);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+/* Quick Telemetry Summary Bar */
+.hud-quick-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.stat-pill {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: border-color 0.15s ease;
+}
+
+.stat-pill:hover {
+  border-color: var(--border-cyan);
+}
+
+.stat-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+.stat-val {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
 .audio-toggle-btn {
   padding: 5px 10px;
   border: 1px solid rgba(0, 243, 255, 0.3);

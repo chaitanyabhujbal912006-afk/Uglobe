@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Globe from './components/Globe.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
 import { useFlights } from './hooks/useFlights.js'
@@ -29,6 +29,15 @@ export default function App() {
   const [renderMode, setRenderMode] = useState('grid') // 'grid' | 'solar' | 'night'
   const [cinematicMode, setCinematicMode] = useState(false)
   const [audioOn, setAudioOn] = useState(true)
+  const [isHudCollapsed, setIsHudCollapsed] = useState(false)
+  const [utcTime, setUtcTime] = useState(() => new Date().toISOString().substring(11, 19) + ' UTC')
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setUtcTime(new Date().toISOString().substring(11, 19) + ' UTC')
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Distance Measurement Tool State
   const [measureMode, setMeasureMode] = useState(false)
@@ -131,20 +140,64 @@ export default function App() {
         onFlyToLocationReady={(fn) => { flyToLocationRef.current = fn }}
       />
 
-      <div className="hud">
-        <div className="hud-header-row">
-          <div>
-            <div className="hud-title">🌍 Live Globe</div>
-            <div className="hud-subtitle">Real-time 3D flight, satellite & earthquake visualizer</div>
+      {isHudCollapsed ? (
+        <button
+          className="hud-minimized-pill"
+          onClick={() => { playClickSound(); setIsHudCollapsed(false) }}
+          title="Expand Mission Control HUD"
+        >
+          <span className="pill-dot" />
+          <span>🌍 UGLOBE HUD</span>
+          <span className="pill-clock">{utcTime}</span>
+          <span className="pill-chevron">⤢</span>
+        </button>
+      ) : (
+        <div className="hud">
+          <div className="hud-header-row">
+            <div>
+              <div className="hud-title">
+                <span>🌍 UGLOBE</span>
+                <span className="hud-utc-badge">{utcTime}</span>
+              </div>
+              <div className="hud-subtitle">Planetary Telemetry & Aerospace Intelligence</div>
+            </div>
+            <div className="hud-header-actions">
+              <button
+                className={`audio-toggle-btn ${audioOn ? 'active' : ''}`}
+                onClick={handleAudioToggle}
+                title="Toggle Web Audio Synthesizer"
+              >
+                {audioOn ? '🔊 SFX' : '🔇 MUTE'}
+              </button>
+              <button
+                className="hud-collapse-btn"
+                onClick={() => { playClickSound(); setIsHudCollapsed(true) }}
+                title="Minimize HUD to corner"
+              >
+                —
+              </button>
+            </div>
           </div>
-          <button
-            className={`audio-toggle-btn ${audioOn ? 'active' : ''}`}
-            onClick={handleAudioToggle}
-            title="Toggle Web Audio Synthesizer"
-          >
-            {audioOn ? '🔊 AUDIO ON' : '🔇 MUTE'}
-          </button>
-        </div>
+
+          {/* Quick Telemetry Summary Bar */}
+          <div className="hud-quick-stats">
+            <div className="stat-pill">
+              <span className="stat-lbl">AIR</span>
+              <span className="stat-val">{flights.length.toLocaleString()}</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-lbl">LEO</span>
+              <span className="stat-val">{satellites.length.toLocaleString()}</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-lbl">SEISMIC</span>
+              <span className="stat-val">{earthquakes.length.toLocaleString()}</span>
+            </div>
+            <div className="stat-pill">
+              <span className="stat-lbl">&gt;10KM</span>
+              <span className="stat-val">{flights.filter(f => (f.altitude || 0) >= 10000).length.toLocaleString()}</span>
+            </div>
+          </div>
 
         {/* Data Layer Toggles */}
         <div className="layer-selector">
@@ -281,6 +334,7 @@ export default function App() {
           </button>
         </div>
       </div>
+    )}
 
       {/* Spatial Distance Measurement Results HUD Card */}
       {measureMode && (
