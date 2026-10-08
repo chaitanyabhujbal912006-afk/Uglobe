@@ -226,6 +226,33 @@ function create3DArcLines(radius) {
   return geo
 }
 
+// Global Tectonic Fault Belts (Pacific Ring of Fire, Mid-Atlantic, Alpine-Himalayan)
+const TECTONIC_BELTS = [
+  // West Pacific Rim
+  [-45, 168], [-38, 178], [-20, 169], [-15, 167], [-5, 150], [0, 125], [10, 126], [22, 121], [35, 140], [45, 150], [53, 160], [52, -175], [55, -160], [60, -145],
+  // North America Pacific Coast -> San Andreas -> Central America -> Andean Subduction
+  [50, -130], [38, -123], [32, -116], [20, -105], [10, -85], [5, -78], [-10, -78], [-25, -71], [-40, -74], [-55, -67],
+  // Mid-Atlantic Ridge
+  [75, 5], [65, -18], [50, -30], [35, -35], [20, -45], [0, -25], [-20, -15], [-40, -18], [-55, 0],
+  // Alpine-Himalayan Belt (Mediterranean -> Iran -> Himalayas -> Sunda)
+  [38, 15], [38, 25], [38, 45], [35, 55], [30, 70], [28, 85], [25, 95], [15, 98], [-5, 105], [-8, 115], [-9, 125]
+]
+
+function createTectonicLines(radius) {
+  const positions = []
+  for (let i = 0; i < TECTONIC_BELTS.length - 1; i++) {
+    const p1 = latLongToVector3(TECTONIC_BELTS[i][0], TECTONIC_BELTS[i][1], radius * 1.003)
+    const p2 = latLongToVector3(TECTONIC_BELTS[i + 1][0], TECTONIC_BELTS[i + 1][1], radius * 1.003)
+    const dist = p1.distanceTo(p2)
+    if (dist < 1.4) {
+      positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z)
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  return geo
+}
+
 /**
  * Parses GeoJSON landmass boundaries (Polygon & MultiPolygon) into 3D Vector3 points
  * and returns a THREE.BufferGeometry for wireframe rendering via THREE.LineSegments.
@@ -351,6 +378,8 @@ export default function Globe({
   const controlsRef        = useRef(null)
   const earthMatRef        = useRef(null)
   const earthMeshRef       = useRef(null)
+  const seismicWavesMeshRef= useRef(null)
+  const tectonicMeshRef    = useRef(null)
   const measureGroupRef    = useRef(null)
   const trajectoryGroupRef = useRef(null)
 
@@ -557,6 +586,26 @@ export default function Globe({
       }
       eqMesh.instanceMatrix.needsUpdate = true
       if (eqMesh.instanceColor) eqMesh.instanceColor.needsUpdate = true
+
+      const wavesMesh = seismicWavesMeshRef.current
+      if (wavesMesh) {
+        wavesMesh.count = nEq
+        for (let i = 0; i < nEq; i++) {
+          const eq = filtered[i]
+          const raw = latLongToVector3(eq.latitude, eq.longitude, GLOBE_RADIUS * 1.002)
+          _pos.set(raw.x, raw.y, raw.z)
+          _hPos.set(raw.x, raw.y, raw.z).normalize()
+          _quat.setFromUnitVectors(_Y, _hPos)
+          _scale.setScalar(1.0 + Math.min(eq.magnitude, 7) * 0.25)
+          _mat.compose(_pos, _quat, _scale)
+          wavesMesh.setMatrixAt(i, _mat)
+        }
+        wavesMesh.instanceMatrix.needsUpdate = true
+      }
+    }
+
+    if (tectonicMeshRef.current) {
+      tectonicMeshRef.current.visible = showEqs
     }
 
     if (selectedTarget) {
@@ -1158,6 +1207,55 @@ export default function Globe({
     globeGroup.add(earthquakesMesh)
     earthquakesMeshRef.current = earthquakesMesh
 
+    // Tectonic Plates Boundary Network
+    const tectonicGeo = createTectonicLines(GLOBE_RADIUS)
+    const tectonicMat = new THREE.LineBasicMaterial({
+      color: 0xff3b30,
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    })
+    const tectonicLinesMesh = new THREE.LineSegments(tectonicGeo, tectonicMat)
+    globeGroup.add(tectonicLinesMesh)
+    tectonicMeshRef.current = tectonicLinesMesh
+
+    // Dynamic Expanding Seismic Shockwave Rings
+    const waveRingGeo = new THREE.RingGeometry(0.012, 0.024, 32)
+    const waveMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: `
+        uniform float uTime;
+        varying float vAlpha;
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          float cycle = fract(uTime * 0.45);
+          float expand = 1.0 + cycle * 3.8;
+          vec4 scaledPos = vec4(position.x * expand, position.y * expand, position.z, 1.0);
+          vec4 worldPos = modelMatrix * instanceMatrix * scaledPos;
+          vAlpha = (1.0 - cycle) * (1.0 - cycle);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        varying float vAlpha;
+        void main() {
+          if (vAlpha < 0.02) discard;
+          vec3 amberGlow = vec3(1.0, 0.55, 0.0) * 2.8;
+          gl_FragColor = vec4(amberGlow, vAlpha * 0.85);
+        }
+      `,
+    })
+    const seismicWavesMesh = new THREE.InstancedMesh(waveRingGeo, waveMaterial, 100)
+    seismicWavesMesh.count = 0
+    globeGroup.add(seismicWavesMesh)
+    seismicWavesMeshRef.current = seismicWavesMesh
+
     updateMarkers()
 
     // 3D Holographic Selection Ring
@@ -1332,6 +1430,7 @@ export default function Globe({
       const nowSec = performance.now() / 1000
       trailMaterial.uniforms.uTime.value = nowSec
       eqMaterial.uniforms.uTime.value    = nowSec
+      waveMaterial.uniforms.uTime.value  = nowSec
 
       if (selectionRing.visible) {
         const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.08
@@ -1381,6 +1480,8 @@ export default function Globe({
       paperPlaneGeometry.dispose(); planeMaterial.dispose()
       satGeometry.dispose(); satMaterial.dispose()
       eqGeometry.dispose(); eqMaterial.dispose()
+      tectonicGeo.dispose(); tectonicMat.dispose()
+      waveRingGeo.dispose(); waveMaterial.dispose()
       arcsGeometry.dispose(); arcsMaterial.dispose()
       ringGeometry.dispose(); ringMaterial.dispose()
       trailGeometry.dispose(); trailMaterial.dispose()
