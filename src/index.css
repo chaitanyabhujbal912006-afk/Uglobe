@@ -282,6 +282,38 @@ html, body, #root {
   box-shadow: 0 0 12px rgba(0, 243, 255, 0.3);
 }
 
+.drone-toggle-btn {
+  padding: 5px 10px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  letter-spacing: 0.05em;
+}
+.drone-toggle-btn:hover {
+  border-color: #10b981;
+  color: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+.drone-toggle-btn.active {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+  animation: dronePulse 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes dronePulse {
+  0% { box-shadow: 0 0 6px rgba(16, 185, 129, 0.3); }
+  100% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.6); }
+}
+
 /* ---- Layer Selector ---- */
 .layer-selector {
   display: flex;

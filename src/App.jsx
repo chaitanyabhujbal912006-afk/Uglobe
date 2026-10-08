@@ -14,6 +14,11 @@ import {
   playFilterSound,
   playMeasureSound,
   playIntelChime,
+  toggleAmbientDrone,
+  isDroneActive,
+  playTransponderBlip,
+  playSeismicRumble,
+  playSatelliteTelemetry,
 } from './utils/soundEngine.js'
 
 export default function App() {
@@ -33,6 +38,9 @@ export default function App() {
   const [cinematicMode, setCinematicMode] = useState(false)
   const [atmosphereTheme, setAtmosphereTheme] = useState('cyan') // 'cyan' | 'amber' | 'matrix' | 'violet'
   const [audioOn, setAudioOn] = useState(true)
+  const [droneOn, setDroneOn] = useState(false)
+  const [measureMode, setMeasureMode] = useState(false)
+  const [measurePoints, setMeasurePoints] = useState([])
   const [isHudCollapsed, setIsHudCollapsed] = useState(false)
   const [isFeedOpen, setIsFeedOpen] = useState(false)
   const [isIntelOpen, setIsIntelOpen] = useState(false)
@@ -107,11 +115,34 @@ export default function App() {
     const next = !audioOn
     setAudioOn(next)
     setAudioEnabled(next)
-    if (next) playClickSound()
+    if (next) {
+      playClickSound()
+    } else if (droneOn) {
+      toggleAmbientDrone()
+      setDroneOn(false)
+    }
+  }
+
+  const handleDroneToggle = () => {
+    const next = toggleAmbientDrone()
+    setDroneOn(next)
+    if (!audioOn && next) {
+      setAudioOn(true)
+      setAudioEnabled(true)
+    }
   }
 
   const handleSelectTarget = (target) => {
     setSelectedTarget(target)
+    if (target) {
+      if (target.type === 'satellite' || target.line1) {
+        playSatelliteTelemetry()
+      } else if (target.mag !== undefined || target.type === 'earthquake') {
+        playSeismicRumble()
+      } else {
+        playTransponderBlip()
+      }
+    }
   }
 
   const handleFlyToTarget = (target) => {
@@ -226,6 +257,13 @@ export default function App() {
                 title="Toggle Web Audio Synthesizer"
               >
                 {audioOn ? '🔊 SFX' : '🔇 MUTE'}
+              </button>
+              <button
+                className={`drone-toggle-btn ${droneOn ? 'active' : ''}`}
+                onClick={handleDroneToggle}
+                title="Toggle Deep Space Ambient Drone Synthesizer"
+              >
+                {droneOn ? '🛰️ DRONE' : '🛰️ OFF'}
               </button>
               <button
                 className="hud-collapse-btn"
