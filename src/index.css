@@ -1126,6 +1126,18 @@ html, body, #root {
   border: 1px solid var(--cyan-neon);
 }
 
+.sat-orbit-tag {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: rgba(0, 255, 136, 0.12);
+  border: 1px solid var(--green-neon);
+  color: var(--green-neon);
+  letter-spacing: 0.05em;
+}
+
 .depth-tag {
   font-size: 9px;
   color: var(--text-muted);

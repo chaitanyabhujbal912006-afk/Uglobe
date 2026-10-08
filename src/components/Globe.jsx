@@ -733,15 +733,61 @@ export default function Globe({
 
     if (!target || target.latitude == null || target.longitude == null) return
 
-    const heading = target.heading ?? 0
     const lat = target.latitude
     const lon = target.longitude
-    let r = GLOBE_RADIUS * 1.013
-    if (target.type === 'satellite') r = GLOBE_RADIUS * (1.16 + ((target.altitudeKm || 500) / 3500))
+
+    if (target.type === 'satellite' || target.noradId) {
+      // 360° Closed Keplerian Orbital Ring Track
+      const rOrb = GLOBE_RADIUS * (1.16 + ((target.altitudeKm || 500) / 3500))
+      const satPos = latLongToVector3(lat, lon, rOrb)
+      const u = satPos.clone().normalize()
+
+      // Calculate orbital plane normal based on inclination
+      const incRad = ((target.inclinationDeg || 51.6) * Math.PI) / 180
+      const lonRad = (lon * Math.PI) / 180
+      const orbNormal = new THREE.Vector3(
+        Math.sin(incRad) * Math.sin(lonRad),
+        Math.cos(incRad),
+        Math.sin(incRad) * Math.cos(lonRad)
+      ).normalize()
+
+      const v = new THREE.Vector3().crossVectors(orbNormal, u).normalize()
+      if (v.lengthSq() < 0.1) {
+        v.crossVectors(new THREE.Vector3(0, 1, 0), u).normalize()
+      }
+
+      const orbPts = []
+      const orbitSteps = 128
+      for (let i = 0; i <= orbitSteps; i++) {
+        const theta = (i / orbitSteps) * Math.PI * 2
+        const pt = new THREE.Vector3()
+          .copy(u).multiplyScalar(Math.cos(theta))
+          .addScaledVector(v, Math.sin(theta))
+          .multiplyScalar(rOrb)
+        orbPts.push(pt)
+      }
+
+      const orbGeo = new THREE.BufferGeometry().setFromPoints(orbPts)
+      const orbMat = new THREE.LineDashedMaterial({
+        color: 0x00ff88,
+        dashSize: 0.05,
+        gapSize: 0.025,
+        transparent: true,
+        opacity: 0.9,
+        toneMapped: false,
+      })
+      const orbLine = new THREE.Line(orbGeo, orbMat)
+      orbLine.computeLineDistances()
+      group.add(orbLine)
+      return
+    }
+
+    const heading = target.heading ?? 0
+    const r = GLOBE_RADIUS * 1.013
 
     const pts = []
     const steps = 32
-    const maxArcDeg = target.type === 'satellite' ? 40 : 10
+    const maxArcDeg = 10
     const radHeading = (heading * Math.PI) / 180
 
     for (let i = 0; i <= steps; i++) {

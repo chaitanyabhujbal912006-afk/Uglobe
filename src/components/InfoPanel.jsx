@@ -210,6 +210,16 @@ export default function InfoPanel({ target, onClearTarget, onFlyToTarget }) {
               <span className="telemetry-label">INCLINATION</span>
               <span className="telemetry-value">{target.inclinationDeg}°</span>
             </div>
+            <div className="info-row">
+              <span className="telemetry-label">NEXT PASS</span>
+              <span className="telemetry-value highlight">
+                ~{(target.orbitPeriodMin || 92) - (Math.floor(Date.now() / 60000) % (target.orbitPeriodMin || 92))} MIN
+              </span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">ORBIT TRACK</span>
+              <span className="sat-orbit-tag">3D CLOSED RING</span>
+            </div>
           </>
         )}
 
