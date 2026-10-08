@@ -755,6 +755,118 @@ html, body, #root {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 243, 255, 0.3);
 }
 
+.tour-launcher-btn {
+  padding: 8px 14px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: var(--radius-md);
+  color: #c084fc;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 15px rgba(168, 85, 247, 0.2);
+  transition: all 0.2s ease;
+}
+.tour-launcher-btn:hover {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #c084fc;
+  color: #e9d5ff;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 20px rgba(168, 85, 247, 0.4);
+}
+.tour-launcher-btn.active {
+  background: linear-gradient(135deg, #9333ea, #a855f7);
+  color: #ffffff;
+  border-color: #c084fc;
+  font-weight: 800;
+  box-shadow: 0 0 22px rgba(168, 85, 247, 0.6);
+  animation: tourGlowPulse 2s infinite alternate;
+}
+
+@keyframes tourGlowPulse {
+  0% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+  100% { box-shadow: 0 0 25px rgba(168, 85, 247, 0.85); }
+}
+
+.fps-pill {
+  font-size: 11px;
+  padding: 8px 12px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--cyan-neon);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.fps-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 8px var(--cyan-neon);
+}
+
+/* Auto-Tour Live Banner */
+.auto-tour-banner {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: rgba(12, 10, 24, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  border-radius: 9999px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(168, 85, 247, 0.35);
+  animation: bannerFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.tour-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a855f7;
+  box-shadow: 0 0 10px #c084fc;
+  animation: beaconPulse 1s infinite alternate;
+}
+
+.tour-banner-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: #e9d5ff;
+  letter-spacing: 0.1em;
+}
+
+.tour-banner-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #a1a1aa;
+}
+
 /* ---- Status Pill & Live Signal Beacon ---- */
 .status-pill {
   font-size: 11px;

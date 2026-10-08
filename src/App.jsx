@@ -45,18 +45,41 @@ export default function App() {
   const [isFeedOpen, setIsFeedOpen] = useState(false)
   const [isIntelOpen, setIsIntelOpen] = useState(false)
   const [utcTime, setUtcTime] = useState(() => new Date().toISOString().substring(11, 19) + ' UTC')
+  const [autoTourActive, setAutoTourActive] = useState(false)
+  const [tourIndex, setTourIndex] = useState(0)
+  const [fps, setFps] = useState(60)
 
   const searchInputRef = useRef(null)
   const resetCameraRef = useRef(null)
   const flyToTargetRef = useRef(null)
   const flyToLocationRef = useRef(null)
   const flyToPresetRef = useRef(null)
+  const tourIndexRef = useRef(0)
 
   useEffect(() => {
     const timer = setInterval(() => {
       setUtcTime(new Date().toISOString().substring(11, 19) + ' UTC')
     }, 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  // WebGL Real-time FPS Monitor
+  useEffect(() => {
+    let frameCount = 0
+    let lastTime = performance.now()
+    let animId
+
+    const loop = (now) => {
+      frameCount++
+      if (now - lastTime >= 1000) {
+        setFps(Math.round((frameCount * 1000) / (now - lastTime)))
+        frameCount = 0
+        lastTime = now
+      }
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
   }, [])
 
   // Keyboard Shortcuts Listener
@@ -66,6 +89,7 @@ export default function App() {
       const isInput = activeTag === 'input' || activeTag === 'textarea'
 
       if (e.key === 'Escape') {
+        if (autoTourActive) { setAutoTourActive(false); return }
         if (isIntelOpen) { setIsIntelOpen(false); return }
         if (isFeedOpen) { setIsFeedOpen(false); return }
         if (selectedTarget) { setSelectedTarget(null); return }
@@ -82,6 +106,9 @@ export default function App() {
       } else if (e.key === 'r' || e.key === 'R') {
         playClickSound()
         resetCameraRef.current?.()
+      } else if (e.key === 't' || e.key === 'T') {
+        playClickSound()
+        setAutoTourActive(prev => !prev)
       } else if (e.key === 'm' || e.key === 'M') {
         playClickSound()
         setMeasureMode(prev => !prev)
@@ -109,7 +136,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isIntelOpen, isFeedOpen, selectedTarget, measureMode])
+  }, [isIntelOpen, isFeedOpen, selectedTarget, measureMode, autoTourActive])
 
   const handleAudioToggle = () => {
     const next = !audioOn
@@ -131,6 +158,59 @@ export default function App() {
       setAudioEnabled(true)
     }
   }
+
+  const handleToggleAutoTour = () => {
+    playClickSound()
+    setAutoTourActive(prev => !prev)
+  }
+
+  // Autonomous Planetary Auto-Tour Controller
+  useEffect(() => {
+    if (!autoTourActive) return
+
+    const triggerNextTourStep = () => {
+      const candidates = []
+      if (satellites && satellites.length > 0) {
+        candidates.push(satellites[tourIndexRef.current % Math.min(satellites.length, 12)])
+      }
+      if (flights && flights.length > 0) {
+        candidates.push(flights[(tourIndexRef.current * 3) % Math.min(flights.length, 30)])
+      }
+      if (earthquakes && earthquakes.length > 0) {
+        const significantEqs = earthquakes.filter(e => e.magnitude >= 3.5)
+        if (significantEqs.length > 0) {
+          candidates.push(significantEqs[tourIndexRef.current % significantEqs.length])
+        }
+      }
+
+      const iconicWaypoints = [
+        { lat: 35.6762, lon: 139.6503, title: 'Tokyo Metropolis', type: 'location' },
+        { lat: 51.5074, lon: -0.1278, title: 'London Air Corridor', type: 'location' },
+        { lat: 21.3069, lon: -157.8583, title: 'Hawaiian Pacific Trench', type: 'location' },
+        { lat: -13.1631, lon: -72.5450, title: 'Andes Cordillera', type: 'location' },
+        { lat: 25.2048, lon: 55.2708, title: 'Dubai Global Hub', type: 'location' },
+      ]
+      candidates.push(iconicWaypoints[tourIndexRef.current % iconicWaypoints.length])
+
+      if (candidates.length === 0) return
+
+      const chosen = candidates[tourIndexRef.current % candidates.length]
+      tourIndexRef.current += 1
+      setTourIndex(tourIndexRef.current)
+
+      if (chosen.type === 'location') {
+        setSelectedTarget(null)
+        flyToLocationRef.current?.(chosen.lat, chosen.lon, 4.0)
+      } else {
+        handleSelectTarget(chosen)
+        flyToTargetRef.current?.(chosen)
+      }
+    }
+
+    triggerNextTourStep()
+    const timer = setInterval(triggerNextTourStep, 7500)
+    return () => clearInterval(timer)
+  }, [autoTourActive, flights, satellites, earthquakes])
 
   const handleSelectTarget = (target) => {
     setSelectedTarget(target)
@@ -292,6 +372,12 @@ export default function App() {
             <div className="stat-pill">
               <span className="stat-lbl">&gt;10KM</span>
               <span className="stat-val">{flights.filter(f => (f.altitude || 0) >= 10000).length.toLocaleString()}</span>
+            </div>
+            <div className="stat-pill" title="Real-time WebGL Frame Rate">
+              <span className="stat-lbl">FPS</span>
+              <span className="stat-val" style={{ color: fps >= 50 ? '#00f3ff' : fps >= 30 ? '#ffb703' : '#ff4757' }}>
+                {fps}
+              </span>
             </div>
           </div>
 
@@ -525,7 +611,24 @@ export default function App() {
         </span>
       </div>
 
+      {/* Autonomous Auto-Tour Mode Indicator Banner */}
+      {autoTourActive && (
+        <div className="auto-tour-banner">
+          <span className="tour-pulse-dot" />
+          <span className="tour-banner-title">AUTOPILOT TOUR ACTIVE</span>
+          <span className="tour-banner-sub">Waypoint #{tourIndex} · Press T or ESC to Disengage</span>
+        </div>
+      )}
+
       <div className="top-right-bar">
+        <button
+          className={`tour-launcher-btn ${autoTourActive ? 'active' : ''}`}
+          onClick={handleToggleAutoTour}
+          title="Toggle Autonomous Planetary Auto-Tour (Shortcut: T)"
+        >
+          {autoTourActive ? '🌍 TOUR: ON' : '🌍 AUTO-TOUR'}
+        </button>
+
         <button
           className={`feed-launcher-btn ${isFeedOpen ? 'active' : ''}`}
           onClick={() => { playClickSound(); setIsFeedOpen(!isFeedOpen) }}
@@ -541,6 +644,11 @@ export default function App() {
         >
           ℹ️ INTEL
         </button>
+
+        <div className="fps-pill" title="Real-time WebGL Frame Rate">
+          <span className="fps-dot" />
+          <span>{fps} FPS</span>
+        </div>
 
         <div className="status-pill">
           <span className={`status-dot ${flightStatus}`} />

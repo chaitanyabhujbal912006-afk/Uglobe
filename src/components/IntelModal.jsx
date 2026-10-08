@@ -70,6 +70,10 @@ export default function IntelModal({ isOpen, onClose }) {
                 <span>Reset Camera View</span>
               </div>
               <div className="shortcut-item">
+                <kbd>T</kbd>
+                <span>Toggle Autonomous Planetary Auto-Tour</span>
+              </div>
+              <div className="shortcut-item">
                 <kbd>M</kbd>
                 <span>Toggle Great-Circle Distance Ruler</span>
               </div>
