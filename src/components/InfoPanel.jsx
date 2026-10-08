@@ -107,11 +107,30 @@ export default function InfoPanel({ target, onClearTarget, onFlyToTarget }) {
           <>
             <div className="info-row">
               <span className="telemetry-label">CALLSIGN</span>
-              <span className="telemetry-value highlight">{target.callsign || 'N/A'}</span>
+              <div className="callsign-group">
+                <span className="telemetry-value highlight">{target.callsign || 'N/A'}</span>
+                <span className={`squawk-badge ${target.squawk === '7700' ? 'emergency' : ''}`}>
+                  SQ {target.squawk || '1200'}
+                </span>
+              </div>
             </div>
             <div className="info-row">
               <span className="telemetry-label">ORIGIN</span>
               <span className="telemetry-value">{target.originCountry || 'UNKNOWN'}</span>
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">PHASE</span>
+              <span className="flight-phase-tag">{
+                (target.altitude ?? 8000) < 1500
+                  ? 'TERMINAL APPROACH'
+                  : (target.verticalRate ?? 0) > 1.2
+                  ? 'CLIMB PROFILE'
+                  : (target.verticalRate ?? 0) < -1.2
+                  ? 'DESCENT PROFILE'
+                  : (target.altitude ?? 8000) >= 8500
+                  ? 'HIGH EN-ROUTE CRUISE'
+                  : 'REGIONAL FLIGHT LEVEL'
+              }</span>
             </div>
             <div className="info-row">
               <span className="telemetry-label">ALTITUDE</span>
@@ -129,6 +148,16 @@ export default function InfoPanel({ target, onClearTarget, onFlyToTarget }) {
                 className="telemetry-alt-fill"
                 style={{ width: `${Math.min(100, Math.max(5, (altitudeMeters / 14000) * 100))}%` }}
               />
+            </div>
+            <div className="info-row">
+              <span className="telemetry-label">VERT SPEED</span>
+              <span className={`vrate-badge ${(target.verticalRate ?? 0) > 1.2 ? 'climb' : (target.verticalRate ?? 0) < -1.2 ? 'descend' : 'level'}`}>
+                {(target.verticalRate ?? 0) > 1.2
+                  ? `▲ +${Math.round(Math.abs(target.verticalRate * 196.85))} FPM`
+                  : (target.verticalRate ?? 0) < -1.2
+                  ? `▼ -${Math.round(Math.abs(target.verticalRate * 196.85))} FPM`
+                  : '► LEVEL (0 FPM)'}
+              </span>
             </div>
             <div className="info-row">
               <span className="telemetry-label">VELOCITY</span>

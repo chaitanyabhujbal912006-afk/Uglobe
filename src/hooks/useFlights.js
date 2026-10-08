@@ -49,6 +49,7 @@ function generateMockFlights() {
       const lon = baseLon + (seededRand() - 0.5) * spread
       const prefix = CALLSIGN_PREFIXES[Math.floor(seededRand() * CALLSIGN_PREFIXES.length)]
       const num    = 100 + Math.floor(seededRand() * 8900)
+      const vRate  = Number(((seededRand() - 0.48) * 10).toFixed(1))
       flights.push({
         id:            `mock-${id++}`,
         callsign:      `${prefix}${num}`,
@@ -56,6 +57,9 @@ function generateMockFlights() {
         latitude:      Math.max(-85, Math.min(85, lat)),
         longitude:     ((lon + 180) % 360) - 180,
         altitude:      6000 + seededRand() * 6000,   // 6–12 km
+        geoAltitude:   6000 + seededRand() * 6000,
+        verticalRate:  vRate,
+        squawk:        `${1000 + (id * 17) % 6700}`,
         onGround:      false,
         velocity:      200 + seededRand() * 300,      // 200–500 knots
         heading:       seededRand() * 360,
@@ -70,7 +74,8 @@ function generateMockFlights() {
 // ---------------------------------------------------------------------------
 function parseStateVector(state) {
   const [icao24, callsign, originCountry, , , longitude, latitude,
-         baroAltitude, onGround, velocity, trueTrack] = state
+         baroAltitude, onGround, velocity, trueTrack,
+         verticalRate, , geoAltitude, squawk] = state
   return {
     id:            icao24,
     callsign:      callsign ? callsign.trim() : 'UNKNOWN',
@@ -78,6 +83,9 @@ function parseStateVector(state) {
     longitude,
     latitude,
     altitude:      baroAltitude,
+    geoAltitude:   geoAltitude ?? baroAltitude,
+    verticalRate:  verticalRate ?? 0,
+    squawk:        squawk || '1200',
     onGround,
     velocity,
     heading:       trueTrack,

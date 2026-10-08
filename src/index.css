@@ -995,6 +995,56 @@ html, body, #root {
   transition: width 0.3s ease;
 }
 
+.callsign-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.squawk-badge {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: rgba(0, 243, 255, 0.1);
+  border: 1px solid var(--border-cyan);
+  color: var(--cyan-neon);
+  letter-spacing: 0.05em;
+}
+.squawk-badge.emergency {
+  background: rgba(255, 0, 85, 0.25);
+  border-color: var(--crimson-neon);
+  color: var(--crimson-neon);
+  animation: pulseBeacon 0.8s infinite;
+}
+
+.flight-phase-tag {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+.vrate-badge {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.vrate-badge.climb {
+  color: var(--green-neon);
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+}
+.vrate-badge.descend {
+  color: var(--amber-neon);
+  text-shadow: 0 0 8px rgba(255, 170, 0, 0.4);
+}
+.vrate-badge.level {
+  color: var(--cyan-neon);
+}
+
 .info-row {
   display: flex;
   justify-content: space-between;
