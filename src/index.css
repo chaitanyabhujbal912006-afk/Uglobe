@@ -2358,6 +2358,100 @@ kbd {
     border-radius: var(--radius-md);
     padding: 12px;
   }
+
+  /* ---- Mobile Header Action Bar & Status Pill ---- */
+  .top-right-bar {
+    top: calc(var(--sat) + 12px);
+    right: calc(var(--sar) + 12px);
+    gap: 6px;
+    z-index: 18;
+  }
+
+  .tour-launcher-btn, .feed-launcher-btn, .intel-launcher-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+    min-height: 34px;
+    gap: 4px;
+  }
+
+  .status-pill {
+    padding: 6px 8px;
+    font-size: 10px;
+    min-height: 34px;
+  }
+
+  /* ---- Hide Clutter & Prevent Collisions on Mobile ---- */
+  .altitude-legend {
+    display: none; /* Prevents overlap with top action bar on narrow screens */
+  }
+
+  .telemetry-ticker {
+    bottom: calc(var(--sab) + 8px);
+    left: 10px;
+    right: 10px;
+    transform: none;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    font-size: 9px;
+    padding: 6px 10px;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 12;
+  }
+
+  .flight-count {
+    bottom: calc(var(--sab) + 38px);
+    right: 10px;
+    font-size: 9px;
+    padding: 4px 8px;
+    z-index: 12;
+    pointer-events: none;
+  }
+
+  .measurement-card {
+    top: calc(var(--sat) + 52px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    z-index: 26;
+    padding: 12px;
+  }
+
+  .auto-tour-banner {
+    top: calc(var(--sat) + 52px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    transform: none;
+    padding: 6px 12px;
+    font-size: 10px;
+    justify-content: center;
+    z-index: 26;
+  }
+}
+
+/* Extra Compact Phones (iPhone SE / <= 480px) */
+@media (max-width: 480px) {
+  .fps-pill {
+    display: none;
+  }
+
+  .status-pill .status-time {
+    display: none;
+  }
+
+  .tour-launcher-btn .btn-text,
+  .intel-launcher-btn .btn-text {
+    display: none; /* Icon-only button on ultra-narrow devices */
+  }
+
+  .tour-launcher-btn,
+  .intel-launcher-btn {
+    padding: 6px 8px;
+  }
 }
 
 

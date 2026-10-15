@@ -612,20 +612,22 @@ export default function App() {
       </div>
 
       {/* Cybernetic Telemetry Ticker */}
-      <div className="telemetry-ticker">
-        <span className="ticker-label">RADAR.NET // LIVE DATA ENGINE</span>
-        <span className="ticker-divider">|</span>
-        <span className="ticker-text">
-          ✈️ {filteredFlightCount.toLocaleString()} VISIBLE FLIGHTS · 🛰️ {satellites.length.toLocaleString()} SATELLITES · 🌋 {earthquakes.length.toLocaleString()} QUAKES · FEEDS: OPENSKY + CELESTRAK + USGS
-        </span>
-      </div>
+      {!selectedTarget && (
+        <div className="telemetry-ticker">
+          <span className="ticker-label">RADAR.NET // LIVE</span>
+          <span className="ticker-divider">|</span>
+          <span className="ticker-text">
+            ✈️ {filteredFlightCount.toLocaleString()} FLIGHTS · 🛰️ {satellites.length.toLocaleString()} SATS · 🌋 {earthquakes.length.toLocaleString()} QUAKES
+          </span>
+        </div>
+      )}
 
       {/* Autonomous Auto-Tour Mode Indicator Banner */}
       {autoTourActive && (
         <div className="auto-tour-banner">
           <span className="tour-pulse-dot" />
-          <span className="tour-banner-title">AUTOPILOT TOUR ACTIVE</span>
-          <span className="tour-banner-sub">Waypoint #{tourIndex} · Press T or ESC to Disengage</span>
+          <span className="tour-banner-title">AUTOPILOT ACTIVE</span>
+          <span className="tour-banner-sub">Waypoint #{tourIndex} · Tap to Stop</span>
         </div>
       )}
 
@@ -635,7 +637,8 @@ export default function App() {
           onClick={handleToggleAutoTour}
           title="Toggle Autonomous Planetary Auto-Tour (Shortcut: T)"
         >
-          {autoTourActive ? '🌍 TOUR: ON' : '🌍 AUTO-TOUR'}
+          <span className="btn-icon">🌍</span>
+          <span className="btn-text">{autoTourActive ? 'TOUR: ON' : 'TOUR'}</span>
         </button>
 
         <button
@@ -643,7 +646,9 @@ export default function App() {
           onClick={() => { playClickSound(); setIsFeedOpen(!isFeedOpen) }}
           title="Open Live Targets Radar Feed"
         >
-          📡 RADAR FEED {isFeedOpen ? '✕' : '▼'}
+          <span className="btn-icon">📡</span>
+          <span className="btn-text">RADAR</span>
+          <span className="btn-caret">{isFeedOpen ? '✕' : '▼'}</span>
         </button>
 
         <button
@@ -651,7 +656,8 @@ export default function App() {
           onClick={() => { playIntelChime(); setIsIntelOpen(true) }}
           title="Mission Intel & Tactical Controls (Shortcut: H)"
         >
-          ℹ️ INTEL
+          <span className="btn-icon">ℹ️</span>
+          <span className="btn-text">INTEL</span>
         </button>
 
         <div className="fps-pill" title="Real-time WebGL Frame Rate">
@@ -661,9 +667,9 @@ export default function App() {
 
         <div className="status-pill">
           <span className={`status-dot ${flightStatus}`} />
-          {statusLabel}
+          <span className="status-text">{statusLabel}</span>
           {lastUpdated && flightStatus === 'live' && (
-            <span style={{ color: '#556077' }}>
+            <span className="status-time" style={{ color: '#556077' }}>
               · {lastUpdated.toLocaleTimeString()}
             </span>
           )}
@@ -692,7 +698,9 @@ export default function App() {
         onFlyToTarget={handleFlyToTarget}
       />
 
-      <div className="flight-count">{filteredFlightCount.toLocaleString()} targets rendering</div>
+      {!selectedTarget && (
+        <div className="flight-count">{filteredFlightCount.toLocaleString()} targets rendering</div>
+      )}
     </div>
   )
 }
