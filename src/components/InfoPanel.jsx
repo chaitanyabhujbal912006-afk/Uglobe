@@ -95,7 +95,7 @@ export default function InfoPanel({ target, onClearTarget, onFlyToTarget }) {
             </button>
           )}
           {onClearTarget && (
-            <button className="telemetry-act-btn close" onClick={onClearTarget} title="Clear Target">
+            <button className="telemetry-act-btn close" onClick={onClearTarget} title="Clear Target" aria-label="Clear target telemetry">
               ✕
             </button>
           )}
