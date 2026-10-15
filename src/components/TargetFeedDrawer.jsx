@@ -84,20 +84,27 @@ export default function TargetFeedDrawer({
   }
 
   return (
-    <div className="target-feed-drawer">
-      <div className="drawer-header">
-        <div className="drawer-title-group">
-          <span className="drawer-title">📡 LIVE TARGETS RADAR</span>
-          <span className="drawer-count">{feedItems.length} TARGETS</span>
+    <>
+      <div
+        className="drawer-backdrop"
+        onClick={() => { playClickSound(); onClose() }}
+        aria-label="Close Feed Drawer"
+      />
+      <div className="target-feed-drawer">
+        <div className="drawer-header">
+          <div className="drawer-title-group">
+            <span className="drawer-title">📡 LIVE TARGETS RADAR</span>
+            <span className="drawer-count">{feedItems.length} TARGETS</span>
+          </div>
+          <button
+            className="drawer-close-btn"
+            onClick={() => { playClickSound(); onClose() }}
+            title="Close Feed"
+            aria-label="Close Radar Feed"
+          >
+            ✕
+          </button>
         </div>
-        <button
-          className="drawer-close-btn"
-          onClick={() => { playClickSound(); onClose() }}
-          title="Close Feed"
-        >
-          ✕
-        </button>
-      </div>
 
       {/* Tabs */}
       <div className="drawer-tabs">
@@ -183,5 +190,6 @@ export default function TargetFeedDrawer({
         )}
       </div>
     </div>
+  </>
   )
 }

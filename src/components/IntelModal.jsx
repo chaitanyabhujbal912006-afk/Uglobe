@@ -118,6 +118,29 @@ export default function IntelModal({ isOpen, onClose }) {
               </div>
             </div>
           </section>
+
+          {/* Mobile Touch Gestures */}
+          <section className="modal-section mobile-touch-section">
+            <h3 className="section-title">📱 MOBILE TOUCH GESTURES</h3>
+            <div className="mouse-controls">
+              <div className="mouse-item">
+                <span className="mouse-lbl">ONE FINGER DRAG</span>
+                <span className="mouse-val">Rotate & Spin 3D Globe</span>
+              </div>
+              <div className="mouse-item">
+                <span className="mouse-lbl">TWO FINGER PINCH</span>
+                <span className="mouse-val">Smooth Optical Zoom (In/Out)</span>
+              </div>
+              <div className="mouse-item">
+                <span className="mouse-lbl">TWO FINGER DRAG</span>
+                <span className="mouse-val">Pan Camera Viewport</span>
+              </div>
+              <div className="mouse-item">
+                <span className="mouse-lbl">TAP TARGET</span>
+                <span className="mouse-val">Lock & Open Live Telemetry Sheet</span>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="modal-footer">
