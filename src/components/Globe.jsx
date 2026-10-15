@@ -658,8 +658,10 @@ export default function Globe({
       targetWorld.applyMatrix4(globeGroupRef.current.matrixWorld)
     }
 
-    const dist = targetWorld.length() * 1.85
-    const camPos = targetWorld.clone().normalize().multiplyScalar(Math.max(3.6, dist))
+    const isPortrait = window.innerWidth < window.innerHeight
+    const distMult = isPortrait ? Math.max(1.35, (window.innerHeight / window.innerWidth) * 0.72) : 1
+    const dist = targetWorld.length() * 1.85 * distMult
+    const camPos = targetWorld.clone().normalize().multiplyScalar(Math.max(3.6 * distMult, dist))
 
     flyToStateRef.current = {
       fromPos: camera.position.clone(),
@@ -686,7 +688,9 @@ export default function Globe({
       targetWorld.applyMatrix4(globeGroupRef.current.matrixWorld)
     }
 
-    const camPos = targetWorld.clone().normalize().multiplyScalar(dist)
+    const isPortrait = window.innerWidth < window.innerHeight
+    const actualDist = isPortrait ? dist * Math.max(1.35, (window.innerHeight / window.innerWidth) * 0.72) : dist
+    const camPos = targetWorld.clone().normalize().multiplyScalar(actualDist)
 
     flyToStateRef.current = {
       fromPos: camera.position.clone(),
@@ -884,7 +888,9 @@ export default function Globe({
 
     const scene  = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
-    camera.position.set(0, 0, 6)
+    const isPortrait = width < height
+    const initialCamZ = isPortrait ? Math.max(6.5, (height / width) * 4.4) : 6
+    camera.position.set(0, 0, initialCamZ)
     cameraRef.current = camera
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -897,9 +903,13 @@ export default function Globe({
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.05
-    controls.minDistance = 3
-    controls.maxDistance = 15
-    controls.rotateSpeed = 0.4
+    controls.minDistance = 2.4
+    controls.maxDistance = 25
+    controls.rotateSpeed = isPortrait ? 0.55 : 0.4
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    }
     controlsRef.current = controls
 
     // Lighting
@@ -1360,7 +1370,23 @@ export default function Globe({
         if (onSelectTarget) onSelectTarget(null)
       }
     }
-    renderer.domElement.addEventListener('click', handleClick)
+    // Differentiate touch drag vs tap to prevent accidental triggers during orbit/pinch gestures
+    let pointerStart = { x: 0, y: 0, time: 0 }
+    function handlePointerDown(event) {
+      pointerStart = { x: event.clientX, y: event.clientY, time: performance.now() }
+    }
+    function handlePointerUp(event) {
+      const dx = event.clientX - pointerStart.x
+      const dy = event.clientY - pointerStart.y
+      const dist = Math.hypot(dx, dy)
+      const duration = performance.now() - pointerStart.time
+      // If moved more than 9px or held longer than 550ms, it was an orbit/pan drag or long-press
+      if (dist > 9 || duration > 550) return
+      handleClick(event)
+    }
+
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
+    renderer.domElement.addEventListener('pointerup', handlePointerUp)
 
     // Resize
     function handleResize() {
@@ -1376,8 +1402,12 @@ export default function Globe({
     // Reset-view tween
     let resetState = null
     function triggerReset() {
+      const w = container.clientWidth
+      const h = container.clientHeight
+      const targetZ = w < h ? Math.max(6.5, (h / w) * 4.4) : 6
       resetState = {
         fromPos:    camera.position.clone(),
+        toPos:      new THREE.Vector3(0, 0, targetZ),
         fromTarget: controls.target.clone(),
         startTime:  performance.now() / 1000,
       }
@@ -1388,11 +1418,14 @@ export default function Globe({
     if (onFlyToLocationReady) onFlyToLocationReady(flyToLocation)
 
     function flyToPreset(preset) {
-      let targetCam = new THREE.Vector3(0, 0, 6)
-      if (preset === 'orbit') targetCam = new THREE.Vector3(3.2, 2.2, 4.4)
-      else if (preset === 'northPole') targetCam = new THREE.Vector3(0.001, 5.8, 0.001)
-      else if (preset === 'southPole') targetCam = new THREE.Vector3(0.001, -5.8, 0.001)
-      else if (preset === 'equator') targetCam = new THREE.Vector3(5.6, 0.2, 0.001)
+      const w = container.clientWidth
+      const h = container.clientHeight
+      const dMult = w < h ? Math.max(1.3, (h / w) * 0.72) : 1
+      let targetCam = new THREE.Vector3(0, 0, 6 * dMult)
+      if (preset === 'orbit') targetCam = new THREE.Vector3(3.2 * dMult, 2.2 * dMult, 4.4 * dMult)
+      else if (preset === 'northPole') targetCam = new THREE.Vector3(0.001, 5.8 * dMult, 0.001)
+      else if (preset === 'southPole') targetCam = new THREE.Vector3(0.001, -5.8 * dMult, 0.001)
+      else if (preset === 'equator') targetCam = new THREE.Vector3(5.6 * dMult, 0.2, 0.001)
 
       flyToStateRef.current = {
         fromPos: camera.position.clone(),
@@ -1454,7 +1487,8 @@ export default function Globe({
         const elapsed = performance.now() / 1000 - resetState.startTime
         const t    = Math.min(elapsed / RESET_DURATION, 1)
         const ease = t * t * (3 - 2 * t)
-        camera.position.lerpVectors(resetState.fromPos, CAMERA_DEFAULT, ease)
+        const targetPos = resetState.toPos || CAMERA_DEFAULT
+        camera.position.lerpVectors(resetState.fromPos, targetPos, ease)
         controls.target.lerpVectors(resetState.fromTarget, _origin, ease)
         controls.update()
         if (t >= 1) { controls.enabled = true; resetState = null }
@@ -1470,7 +1504,8 @@ export default function Globe({
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener('resize', handleResize)
-      renderer.domElement.removeEventListener('click', handleClick)
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp)
       controls.dispose()
       composer.dispose()
       renderer.dispose()
