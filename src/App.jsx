@@ -41,7 +41,9 @@ export default function App() {
   const [droneOn, setDroneOn] = useState(false)
   const [measureMode, setMeasureMode] = useState(false)
   const [measurePoints, setMeasurePoints] = useState([])
-  const [isHudCollapsed, setIsHudCollapsed] = useState(false)
+  const [isHudCollapsed, setIsHudCollapsed] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth <= 768
+  })
   const [isFeedOpen, setIsFeedOpen] = useState(false)
   const [isIntelOpen, setIsIntelOpen] = useState(false)
   const [utcTime, setUtcTime] = useState(() => new Date().toISOString().substring(11, 19) + ' UTC')
@@ -321,7 +323,13 @@ export default function App() {
           <span className="pill-chevron">⤢</span>
         </button>
       ) : (
-        <div className="hud">
+        <>
+          <div
+            className="hud-backdrop"
+            onClick={() => { playClickSound(); setIsHudCollapsed(true) }}
+            aria-label="Close HUD"
+          />
+          <div className="hud">
           <div className="hud-header-row">
             <div>
               <div className="hud-title">
@@ -547,6 +555,7 @@ export default function App() {
           </button>
         </div>
       </div>
+    </>
     )}
 
       {/* Spatial Distance Measurement Results HUD Card */}
